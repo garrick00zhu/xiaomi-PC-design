@@ -1,0 +1,2626 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>悬浮球 · 可交互 Demo</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+  html, body { width: 100%; height: 100%; overflow: hidden; font-family: -apple-system, "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif; }
+  body {
+    background: url('bg.png') center/cover no-repeat, linear-gradient(135deg, #2a3a5a, #1a2540);
+    color: #1d1d1f;
+    position: relative;
+  }
+
+  /* ===== 顶部使用提示按钮 ===== */
+  .hint-toggle {
+    position: fixed; top: 12px; right: 12px; z-index: 10000;
+    background: rgba(20,20,30,0.75);
+    backdrop-filter: blur(12px);
+    color: #fff;
+    padding: 6px 12px;
+    border-radius: 14px;
+    font-size: 11px;
+    cursor: pointer;
+    border: 1px solid rgba(255,255,255,0.15);
+    display: flex; align-items: center; gap: 6px;
+  }
+  .hint-toggle:hover { background: rgba(20,20,30,0.92); }
+
+  /* ===== 任务栏托盘面板 ===== */
+  .tray-panel {
+    position: fixed;
+    top: 46px;
+    right: 108px;
+    z-index: 10000;
+    width: 240px;
+    background: rgba(255,255,255,0.96);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(0,0,0,0.06);
+    border-radius: 10px;
+    padding: 12px 0 6px;
+    box-shadow: 0 8px 28px rgba(0,0,0,0.14);
+    display: none;
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    color: #1d1d1f;
+  }
+  .tray-panel.show { display: block; }
+  .tray-device-name {
+    padding: 0 16px 10px;
+    font-size: 14px;
+    font-weight: 600;
+  }
+  .tray-action {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 16px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: background 0.12s;
+  }
+  .tray-action:hover { background: rgba(0,0,0,0.04); }
+  .tray-icon {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    background: #ececef;
+    display: flex; align-items: center; justify-content: center;
+    color: #555;
+  }
+  .tray-divider {
+    height: 1px;
+    background: rgba(0,0,0,0.06);
+    margin: 6px 0;
+  }
+  .tray-item {
+    padding: 8px 16px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: background 0.12s;
+  }
+  .tray-item:hover { background: rgba(0,0,0,0.04); }
+  .hint-panel {
+    position: fixed; top: 46px; right: 12px; z-index: 10000;
+    background: rgba(20,20,30,0.95);
+    backdrop-filter: blur(20px);
+    color: #fff;
+    padding: 12px 16px;
+    border-radius: 8px;
+    font-size: 11.5px;
+    line-height: 1.9;
+    width: 240px;
+    border: 1px solid rgba(255,255,255,0.1);
+    display: none;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+  }
+  .hint-panel.show { display: block; }
+  .hint-panel b { color: #4a90e2; font-weight: 600; }
+  .hint-panel .reset-btn {
+    margin-top: 8px;
+    background: rgba(255,255,255,0.12);
+    border: none; color: #fff;
+    padding: 5px 10px;
+    border-radius: 4px; cursor: pointer;
+    font-size: 11px;
+    width: 100%;
+  }
+  .hint-panel .reset-btn:hover { background: rgba(255,255,255,0.22); }
+
+  /* ===== 桌面区域 ===== */
+  .desktop {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 44px;
+  }
+
+  /* Windows 风格桌面图标 */
+  .file-card {
+    position: absolute;
+    width: 84px;
+    cursor: pointer;
+    padding: 6px 4px;
+    border-radius: 4px;
+    text-align: center;
+    transition: background 0.1s;
+  }
+  .file-card:hover { background: rgba(255,255,255,0.18); }
+  .file-card:active { background: rgba(26,115,232,0.35); }
+  .file-card.dragging { opacity: 0.4; }
+  .file-card.drag-ghost {
+    background: rgba(255,255,255,0.25);
+    backdrop-filter: blur(6px);
+  }
+  .file-card .file-icon {
+    width: 48px; height: 48px;
+    margin: 0 auto 4px;
+    display: flex; align-items: center; justify-content: center;
+    position: relative;
+  }
+  .file-card .file-icon svg {
+    width: 100%; height: 100%;
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+  }
+  .file-card .file-name {
+    font-size: 11px;
+    color: #fff;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.85);
+    line-height: 1.3;
+    word-break: break-all;
+  }
+
+  /* 模拟应用窗口 */
+  .app-window {
+    position: absolute;
+    background: #fff;
+    border-radius: 6px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+    overflow: hidden;
+  }
+  .app-titlebar {
+    height: 32px; background: #f3f3f3;
+    display: flex; align-items: center; padding: 0 12px;
+    border-bottom: 1px solid #e5e6eb;
+    font-size: 12px; color: #555;
+    justify-content: space-between;
+  }
+  .win-controls { display: flex; gap: 4px; }
+  .win-controls span {
+    width: 22px; height: 22px;
+    display: inline-flex; align-items: center; justify-content: center;
+    color: #555; font-size: 11px; cursor: pointer;
+  }
+  .win-controls span:hover { background: #e5e6eb; }
+  .win-controls .close:hover { background: #e81123; color: #fff; }
+  .app-body {
+    padding: 16px 20px;
+    font-size: 12.5px;
+    line-height: 1.7;
+    color: #333;
+    height: calc(100% - 32px);
+    overflow: auto;
+  }
+
+  /* ===== 悬浮球 ===== */
+  .ball {
+    position: fixed;
+    width: 56px; height: 56px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #1a73e8, #4a90e2);
+    box-shadow: 0 6px 20px rgba(26,115,232,0.45), inset 0 1px 0 rgba(255,255,255,0.3);
+    display: flex; align-items: center; justify-content: center;
+    cursor: grab;
+    z-index: 9000;
+    transition: transform 0.2s, box-shadow 0.2s, width 0.2s, height 0.2s;
+  }
+  .ball:hover { transform: scale(1.06); }
+  .ball:active { cursor: grabbing; }
+  .ball.dragging { transition: none; box-shadow: 0 12px 36px rgba(26,115,232,0.65); }
+  .ball.large { width: 72px; height: 72px; box-shadow: 0 8px 28px rgba(26,115,232,0.7); }
+  .ball.busy::before {
+    content: ''; position: absolute; inset: -3px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    border-top-color: #fff;
+    animation: spin 1s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  /* 完成红点 */
+  .ball-badge {
+    position: absolute; top: -2px; right: -2px;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: #ef4444;
+    border: 2px solid #fff;
+    display: none;
+    animation: pulse 1.5s ease-in-out infinite;
+  }
+  .ball-badge.show { display: block; }
+  @keyframes pulse {
+    0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239,68,68,0.6); }
+    50% { transform: scale(1.15); box-shadow: 0 0 0 8px rgba(239,68,68,0); }
+  }
+  .ball svg { width: 28px; height: 28px; }
+  .ball.large svg { width: 36px; height: 36px; }
+  .ball-icon { fill: none; stroke: #fff; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+  .ball.hidden { display: none; }
+
+  /* 提示气泡（从悬浮球出） */
+  .ball-tooltip {
+    position: fixed;
+    background: rgba(20,20,30,0.92);
+    color: #fff;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 11px;
+    z-index: 9100;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+  .ball-tooltip.show { opacity: 1; }
+
+  /* ===== 拖拽候选操作 ===== */
+  .drag-options {
+    position: fixed;
+    background: #fff;
+    border-radius: 28px;
+    box-shadow: 0 12px 32px rgba(0,0,0,0.22);
+    padding: 6px;
+    display: flex; gap: 4px;
+    z-index: 9050;
+    opacity: 0; transform: scale(0.9);
+    transition: opacity 0.2s, transform 0.2s;
+    pointer-events: none;
+  }
+  .drag-options::before {
+    content: '继续拖到某个操作上松手即可执行';
+    position: absolute;
+    bottom: -28px; left: 50%; transform: translateX(-50%);
+    background: rgba(20,20,30,0.92);
+    color: #fff;
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 11px;
+    white-space: nowrap;
+  }
+  .drag-options.show { opacity: 1; transform: scale(1); }
+  .drag-options .opt {
+    width: 64px; height: 64px;
+    border-radius: 50%;
+    background: #f5f6f8;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    font-size: 10px; color: #555;
+    gap: 2px;
+    transition: background 0.15s, color 0.15s, transform 0.15s;
+  }
+  .drag-options .opt:hover, .drag-options .opt.active {
+    background: #1a73e8; color: #fff;
+    transform: scale(1.15);
+    box-shadow: 0 6px 16px rgba(26,115,232,0.4);
+  }
+  .drag-options .opt svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+  /* ===== 悬浮球右键菜单 ===== */
+  .ball-menu {
+    position: fixed;
+    background: #fff;
+    border-radius: 6px;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.18);
+    padding: 4px;
+    min-width: 200px;
+    z-index: 9200;
+    font-size: 12.5px;
+    border: 1px solid #e5e6eb;
+  }
+  .ball-menu .item {
+    padding: 7px 14px;
+    border-radius: 4px;
+    cursor: pointer;
+    color: #1d1d1f;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .ball-menu .item:hover { background: #f0f7ff; color: #1a73e8; }
+  .ball-menu .item.agent-item {
+    padding: 7px 14px 7px 22px;
+  }
+  .ball-menu .item.agent-item.current { color: #1a73e8; }
+  .ball-menu .item.agent-item .agent-svg {
+    width: 16px; height: 16px;
+    fill: none; stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round; stroke-linejoin: round;
+  }
+  .ball-menu .item .check { margin-left: auto; color: #1a73e8; font-weight: 600; }
+  .ball-menu .group-label {
+    padding: 6px 14px 2px;
+    font-size: 11px;
+    color: #999;
+  }
+  .ball-menu .divider { height: 1px; background: #ebedf0; margin: 4px 0; }
+
+  /* ===== 工具盘（长按弹出） ===== */
+  .tool-pan {
+    position: fixed;
+    background: #fff;
+    border-radius: 14px;
+    box-shadow: 0 12px 36px rgba(0,0,0,0.22);
+    padding: 10px;
+    display: grid;
+    grid-template-columns: repeat(3, 64px);
+    gap: 6px;
+    z-index: 9100;
+    opacity: 0; transform: scale(0.9);
+    transition: opacity 0.2s, transform 0.2s;
+    pointer-events: none;
+  }
+  .tool-pan.show { opacity: 1; transform: scale(1); pointer-events: auto; }
+  .tool-pan .t {
+    width: 64px; height: 64px;
+    border-radius: 8px;
+    background: #f5f6f8;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    font-size: 10px; color: #555;
+    gap: 4px;
+    cursor: pointer;
+  }
+  .tool-pan .t:hover { background: #1a73e8; color: #fff; }
+  .tool-pan .t svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+  /* ===== 对话小窗 ===== */
+  .ball-popup {
+    position: fixed;
+    width: 360px; height: 480px;
+    background: #fff; border-radius: 12px;
+    box-shadow: 0 16px 48px rgba(0,0,0,0.25);
+    overflow: hidden;
+    display: flex; flex-direction: column;
+    z-index: 9100;
+    opacity: 0; transform: scale(0.95) translateY(10px);
+    transition: opacity 0.2s, transform 0.2s;
+    pointer-events: none;
+  }
+  .ball-popup.show { opacity: 1; transform: scale(1) translateY(0); pointer-events: auto; }
+  .ball-popup.drag-over { box-shadow: 0 0 0 3px #1a73e8, 0 16px 48px rgba(0,0,0,0.25); }
+  .popup-header {
+    padding: 12px 16px;
+    border-bottom: 1px solid #ebedf0;
+    display: flex; align-items: center; gap: 8px;
+    font-size: 13px; font-weight: 600;
+  }
+  .popup-mode-wrap { margin-left: auto; position: relative; }
+  .popup-mode {
+    font-size: 11px;
+    background: #f0f7ff; color: #1a73e8;
+    padding: 4px 10px; border-radius: 12px;
+    cursor: pointer;
+    display: inline-flex; align-items: center; gap: 4px;
+  }
+  .mode-dropdown {
+    position: absolute; top: 100%; right: 0; margin-top: 6px;
+    background: #fff; border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+    padding: 4px;
+    min-width: 140px;
+    display: none;
+    z-index: 9200;
+  }
+  .mode-dropdown.show { display: block; }
+  .mode-dropdown .m-item {
+    padding: 6px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .mode-dropdown .m-item:hover { background: #f0f7ff; }
+  .mode-dropdown .m-item.active { color: #1a73e8; font-weight: 500; }
+
+  .popup-close {
+    margin-left: 8px;
+    width: 24px; height: 24px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 4px;
+    cursor: pointer;
+    color: #888;
+  }
+  .popup-close:hover { background: #f5f6f8; color: #333; }
+
+  .popup-body {
+    flex: 1; padding: 14px 16px; overflow: auto;
+    font-size: 12.5px; color: #555;
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .popup-msg {
+    background: #f5f6f8; padding: 10px 12px;
+    border-radius: 8px; line-height: 1.6;
+    align-self: flex-start;
+    max-width: 85%;
+  }
+  .popup-msg.user { background: #1a73e8; color: #fff; align-self: flex-end; }
+
+  .popup-input {
+    border-top: 1px solid #ebedf0;
+    padding: 10px 12px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .popup-input input {
+    flex: 1; background: #f5f6f8; border: none; outline: none;
+    border-radius: 18px; padding: 9px 14px;
+    font-size: 12px; color: #333;
+  }
+  .popup-input input::placeholder { color: #aaa; }
+  .popup-input .send {
+    width: 32px; height: 32px; border-radius: 50%;
+    background: #1a73e8; color: #fff; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .popup-input .send:hover { background: #155bb5; }
+
+  /* ===== 小米互联服务三栏 App ===== */
+  .miclaw-app {
+    position: fixed;
+    width: 1080px; height: 660px;
+    max-width: calc(100vw - 80px);
+    max-height: calc(100vh - 80px);
+    left: 50%; top: 50%;
+    transform: translate(-50%, -50%) scale(0.96);
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 24px 80px rgba(0,0,0,0.35), 0 0 0 1px rgba(0,0,0,0.06);
+    overflow: hidden;
+    z-index: 9810;
+    opacity: 0;
+    transition: opacity 0.22s, transform 0.22s;
+    pointer-events: none;
+    display: flex; flex-direction: column;
+  }
+  .miclaw-app.show {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+    pointer-events: auto;
+  }
+  .ma-titlebar {
+    height: 38px;
+    display: flex; align-items: center;
+    padding: 0 14px;
+    border-bottom: 1px solid #f0f1f3;
+    font-size: 12.5px;
+    color: #555;
+    background: #fafbfc;
+  }
+  .ma-traffic { display: flex; gap: 6px; }
+  .ma-traffic .dot {
+    width: 12px; height: 12px; border-radius: 50%;
+  }
+  .ma-traffic .dot.red { background: #ff5f56; cursor: pointer; }
+  .ma-traffic .dot.yellow { background: #ffbd2e; }
+  .ma-traffic .dot.green { background: #27c93f; }
+  .ma-title { flex: 1; text-align: center; font-weight: 500; }
+
+  .ma-body { flex: 1; display: flex; overflow: hidden; }
+
+  /* 左栏 */
+  .ma-side {
+    width: 180px;
+    background: #fafbfc;
+    border-right: 1px solid #f0f1f3;
+    padding: 14px 8px;
+    overflow-y: auto;
+    font-size: 13px;
+    display: flex; flex-direction: column;
+  }
+  .ma-side > * { flex-shrink: 0; }
+  .ma-side .ma-side-spacer { flex: 1; }
+  .ma-side-item {
+    padding: 8px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    color: #1d1d1f;
+    display: flex; align-items: center; gap: 8px;
+    margin-bottom: 2px;
+  }
+  .ma-side-item:hover { background: #eef0f3; }
+  .ma-side-item.active { background: #fff; color: #1a73e8; font-weight: 500; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+  .ma-side-divider {
+    margin: 12px 12px 6px;
+    color: #999; font-size: 11px;
+  }
+  .ma-side-xiaoai {
+    margin: 8px 0 0;
+    padding: 10px 14px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, rgba(139,92,246,0.08), rgba(26,115,232,0.06));
+    border: 1px solid rgba(139,92,246,0.2);
+    cursor: pointer;
+    display: flex; align-items: center; gap: 8px;
+    font-weight: 500;
+    color: #8b5cf6;
+  }
+  .ma-side-xiaoai:hover { background: linear-gradient(135deg, rgba(139,92,246,0.16), rgba(26,115,232,0.12)); }
+
+  /* 中栏 */
+  .ma-mid {
+    flex: 1;
+    overflow-y: auto;
+    background: linear-gradient(180deg, #fbf8ff 0%, #ffffff 60%);
+    padding: 24px 28px;
+  }
+  .ma-mid-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 24px;
+  }
+  .ma-mid-title { font-size: 20px; font-weight: 600; }
+  .ma-mid-tabs {
+    display: flex; gap: 4px;
+    background: #f0f1f3;
+    border-radius: 16px;
+    padding: 3px;
+    font-size: 12px;
+  }
+  .ma-mid-tab {
+    padding: 5px 14px;
+    border-radius: 13px;
+    cursor: pointer;
+    color: #555;
+  }
+  .ma-mid-tab.active { background: #fff; color: #1a73e8; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+
+  /* 设备页：当前选中设备 */
+  .ma-device-current {
+    text-align: center;
+    margin: 20px 0;
+  }
+  .ma-device-name { font-size: 22px; font-weight: 600; }
+  .ma-device-name .arrow { font-size: 14px; color: #888; margin-left: 6px; }
+  .ma-device-meta { font-size: 12px; color: #888; margin-top: 4px; }
+  .ma-device-mock {
+    width: 130px; height: 180px;
+    margin: 24px auto;
+    border-radius: 18px;
+    background: linear-gradient(135deg, #d4af80, #e8c89e);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+    position: relative;
+  }
+  .ma-device-mock::after {
+    content: '';
+    position: absolute; inset: 12px;
+    border-radius: 12px;
+    background: linear-gradient(180deg, #6b88a8, #4a6788);
+  }
+  .ma-device-actions {
+    display: flex; gap: 8px; justify-content: center;
+    margin-top: 16px;
+  }
+  .ma-device-action {
+    background: #fff;
+    border: 1px solid #ebedf0;
+    border-radius: 16px;
+    padding: 6px 14px;
+    font-size: 12px;
+    cursor: pointer;
+    display: flex; align-items: center; gap: 4px;
+  }
+  .ma-device-action:hover { border-color: #1a73e8; color: #1a73e8; }
+
+  .ma-feature-card {
+    margin-top: 32px;
+    background: #fff;
+    border: 1px solid #ebedf0;
+    border-radius: 12px;
+    padding: 16px 20px;
+  }
+  .ma-feature-title { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+  .ma-feature-sub { font-size: 11px; color: #888; margin-bottom: 14px; }
+  .ma-feature-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 8px;
+  }
+  .ma-feature-item {
+    background: #f5f6f8;
+    border-radius: 10px;
+    padding: 12px 8px;
+    text-align: center;
+    cursor: pointer;
+    font-size: 11px;
+    color: #1d1d1f;
+  }
+  .ma-feature-item:hover { background: #e8f1fc; color: #1a73e8; }
+  .ma-feature-item .icon { font-size: 22px; display:block; margin-bottom: 4px; }
+
+  /* 云服务页 */
+  .ma-cloud-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 8px;
+  }
+  .ma-cloud-img {
+    aspect-ratio: 1;
+    border-radius: 8px;
+    background-size: cover;
+  }
+
+  /* 右栏：当前业务的助手对话 */
+  .ma-agent {
+    width: 280px;
+    background: #fafbfc;
+    border-left: 1px solid #f0f1f3;
+    display: flex; flex-direction: column;
+  }
+  .ma-agent-head {
+    padding: 12px 14px;
+    border-bottom: 1px solid #f0f1f3;
+    display: flex; align-items: center; gap: 8px;
+    font-size: 13px; font-weight: 500;
+  }
+  .ma-agent-head .av {
+    width: 24px; height: 24px; border-radius: 50%;
+    background: linear-gradient(135deg,#10b981,#34d399);
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 12px;
+  }
+  .ma-agent-head.cloud .av { background: linear-gradient(135deg,#8b5cf6,#a78bfa); }
+  .ma-agent-head .actions { margin-left: auto; display: flex; gap: 6px; color: #aaa; font-size: 14px; }
+  .ma-agent-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 12px;
+    font-size: 12.5px;
+  }
+  .ma-msg { max-width: 90%; margin-bottom: 12px; padding: 8px 10px; border-radius: 10px; line-height: 1.5; }
+  .ma-msg.user { background: #1a73e8; color: #fff; margin-left: auto; border-radius: 10px 10px 2px 10px; width: fit-content; }
+  .ma-msg.ai { background: #fff; border: 1px solid #ebedf0; color: #1d1d1f; border-radius: 10px 10px 10px 2px; width: fit-content; }
+  .ma-msg.ai-avatar { display: flex; align-items: flex-start; gap: 6px; }
+  .ma-msg.ai-avatar .a { width: 20px; height: 20px; border-radius: 50%; background: linear-gradient(135deg,#10b981,#34d399); flex-shrink: 0; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 10px; }
+  .ma-agent-input {
+    padding: 10px 12px;
+    border-top: 1px solid #f0f1f3;
+  }
+  .ma-agent-input-box {
+    background: #fff;
+    border: 1px solid #ebedf0;
+    border-radius: 10px;
+    padding: 10px 12px;
+  }
+  .ma-agent-input-box textarea {
+    width: 100%; border: none; outline: none; resize: none;
+    font-family: inherit; font-size: 12.5px;
+    background: transparent;
+    min-height: 20px; max-height: 60px;
+  }
+  .ma-agent-input-box textarea::placeholder { color: #aaa; }
+  .ma-agent-input-toolbar {
+    display: flex; align-items: center;
+    margin-top: 4px;
+  }
+  .ma-agent-send {
+    margin-left: auto;
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    background: #1a73e8; color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; font-size: 13px;
+  }
+
+  /* ===== 超级小爱独立窗口（已有 .miclaw-window 复用）===== */
+  .miclaw-window {
+    position: fixed;
+    width: 1080px; height: 680px;
+    max-width: calc(100vw - 80px);
+    max-height: calc(100vh - 80px);
+    left: 50%; top: 50%;
+    transform: translate(-50%, -50%) scale(0.96);
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 24px 80px rgba(0,0,0,0.35), 0 0 0 1px rgba(0,0,0,0.06);
+    overflow: hidden;
+    z-index: 9800;
+    opacity: 0;
+    transition: opacity 0.22s, transform 0.22s;
+    pointer-events: none;
+    display: flex; flex-direction: column;
+  }
+  .miclaw-window.show {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+    pointer-events: auto;
+  }
+  .miclaw-titlebar {
+    height: 38px;
+    display: flex; align-items: center;
+    padding: 0 14px;
+    border-bottom: 1px solid #f0f1f3;
+    font-size: 12.5px;
+    color: #555;
+    background: #fafbfc;
+  }
+  .miclaw-traffic {
+    display: flex; gap: 6px;
+  }
+  .miclaw-traffic .dot {
+    width: 12px; height: 12px; border-radius: 50%;
+  }
+  .miclaw-traffic .dot.red { background: #ff5f56; cursor: pointer; }
+  .miclaw-traffic .dot.yellow { background: #ffbd2e; }
+  .miclaw-traffic .dot.green { background: #27c93f; }
+  .miclaw-title {
+    flex: 1; text-align: center;
+    font-weight: 500;
+  }
+
+  .miclaw-body {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+  }
+
+  /* 左栏 */
+  .miclaw-side {
+    width: 200px;
+    background: #fafbfc;
+    border-right: 1px solid #f0f1f3;
+    padding: 12px 8px;
+    overflow-y: auto;
+    font-size: 12.5px;
+    display: flex;
+    flex-direction: column;
+  }
+  .miclaw-new {
+    background: #fff;
+    border: 1px solid #e5e6eb;
+    border-radius: 6px;
+    padding: 8px 12px;
+    cursor: pointer;
+    margin-bottom: 12px;
+    display: flex; align-items: center; gap: 8px;
+    color: #1d1d1f;
+    font-weight: 500;
+  }
+  .miclaw-new:hover { background: #f0f7ff; border-color: #1a73e8; color: #1a73e8; }
+  .miclaw-side-item {
+    padding: 6px 12px;
+    border-radius: 5px;
+    cursor: pointer;
+    color: #555;
+    display: flex; align-items: center; gap: 8px;
+    margin-bottom: 1px;
+  }
+  .miclaw-side-item:hover { background: #eef0f3; color: #1d1d1f; }
+  .miclaw-side-divider {
+    margin: 10px 8px 6px;
+    color: #aaa;
+    font-size: 11px;
+  }
+  .miclaw-side-history {
+    padding: 5px 12px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 12px;
+    color: #666;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .miclaw-side-history:hover { background: #eef0f3; color: #1d1d1f; }
+  .miclaw-side-history.dot::before {
+    content: '•';
+    color: #1a73e8;
+    margin-right: 2px;
+  }
+
+  /* 主区 */
+  .miclaw-main {
+    flex: 1;
+    display: flex; flex-direction: column;
+    background: linear-gradient(180deg, #fbf8ff 0%, #ffffff 60%);
+  }
+  .miclaw-welcome {
+    flex: 1;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    padding: 0 40px;
+  }
+  .miclaw-logo {
+    width: 40px; height: 40px;
+    margin-bottom: 16px;
+    color: #8b5cf6;
+  }
+  .miclaw-logo svg { width: 100%; height: 100%; fill: currentColor; }
+  .miclaw-h1 {
+    font-size: 22px; font-weight: 600; margin-bottom: 8px;
+    color: #1d1d1f;
+  }
+  .miclaw-sub {
+    font-size: 12.5px; color: #888;
+    margin-bottom: 32px;
+  }
+  .miclaw-suggestions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    width: 100%;
+    max-width: 480px;
+  }
+  .miclaw-sug {
+    background: #fff;
+    border: 1px solid #e5e6eb;
+    border-radius: 10px;
+    padding: 12px 14px;
+    cursor: pointer;
+    font-size: 13px;
+    color: #1d1d1f;
+    display: flex; align-items: center; gap: 8px;
+    transition: all 0.15s;
+  }
+  .miclaw-sug:hover {
+    border-color: #1a73e8; transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(26,115,232,0.08);
+  }
+
+  /* 输入条 */
+  .miclaw-input-wrap {
+    padding: 16px 32px 24px;
+  }
+  .miclaw-input {
+    max-width: 720px; margin: 0 auto;
+    background: #fff;
+    border: 1px solid #e5e6eb;
+    border-radius: 12px;
+    padding: 12px 14px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  }
+  .miclaw-input:focus-within {
+    border-color: #1a73e8;
+  }
+  .miclaw-input textarea {
+    width: 100%;
+    border: none; outline: none; resize: none;
+    font-family: inherit;
+    font-size: 13.5px;
+    color: #1d1d1f;
+    background: transparent;
+    min-height: 24px; max-height: 80px;
+    line-height: 1.5;
+  }
+  .miclaw-input textarea::placeholder { color: #aaa; }
+  .miclaw-input-toolbar {
+    display: flex; align-items: center;
+    margin-top: 6px;
+  }
+  .miclaw-attach {
+    width: 28px; height: 28px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 6px;
+    color: #888; cursor: pointer;
+  }
+  .miclaw-attach:hover { background: #f5f6f8; color: #1a73e8; }
+  .miclaw-send {
+    margin-left: auto;
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    background: #1a73e8; color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+  }
+  .miclaw-send:hover { background: #155bb5; }
+
+  /* 引用条（拖入文件 / 划词引用） */
+  .miclaw-context {
+    max-width: 720px; margin: 0 auto 8px;
+    background: #f0f7ff;
+    border: 1px solid #c5dcfa;
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 12px; color: #1a73e8;
+    display: none;
+    align-items: center; gap: 8px;
+  }
+  .miclaw-context.show { display: flex; }
+  .miclaw-context .ctx-close {
+    margin-left: auto; cursor: pointer; color: #888;
+  }
+
+  /* Agent 切换器（标题栏内） */
+  .miclaw-agent-switch {
+    margin-left: 12px;
+    background: rgba(0,0,0,0.04);
+    border-radius: 14px;
+    padding: 3px 4px 3px 8px;
+    display: flex; align-items: center; gap: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    color: #555;
+    user-select: none;
+  }
+  .miclaw-agent-switch:hover { background: rgba(0,0,0,0.08); }
+  .miclaw-agent-switch .agent-tag {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-weight: 500;
+  }
+  .miclaw-agent-switch .agent-arrow {
+    font-size: 9px; opacity: 0.6;
+  }
+  .agent-dropdown {
+    position: absolute;
+    top: 42px; left: 220px;
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+    padding: 4px;
+    min-width: 200px;
+    z-index: 9810;
+    display: none;
+    border: 1px solid #ebedf0;
+  }
+  .agent-dropdown.show { display: block; }
+  .agent-item {
+    padding: 9px 12px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 12.5px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .agent-item:hover { background: #f5f6f8; }
+  .agent-item.active { background: #f0f7ff; color: #1a73e8; }
+  .agent-item .ai-icon {
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    color: #fff;
+    font-size: 13px;
+    flex-shrink: 0;
+  }
+  .agent-item .ai-icon.connect { background: linear-gradient(135deg, #10b981, #34d399); }
+  .agent-item .ai-icon.cloud { background: linear-gradient(135deg, #8b5cf6, #a78bfa); }
+  .agent-item .ai-icon.xiaoai { background: linear-gradient(135deg, #1a73e8, #4a90e2); }
+  .agent-item .ai-info { flex: 1; }
+  .agent-item .ai-name { font-weight: 500; color: #1d1d1f; }
+  .agent-item .ai-desc { font-size: 11px; color: #888; margin-top: 1px; }
+  .agent-item .check { color: #1a73e8; font-weight: 600; }
+
+  /* ===== 悬浮球旁的 Agent 切换小图标（悬停 0.5s 后滑出） ===== */
+  .agent-pickers {
+    position: fixed;
+    z-index: 9050;
+    display: flex; flex-direction: column; gap: 8px;
+    pointer-events: none;
+    opacity: 0;
+    transform: translateX(8px);
+    transition: opacity 0.18s, transform 0.18s;
+  }
+  .agent-pickers.show {
+    opacity: 1; transform: translateX(0);
+    pointer-events: auto;
+  }
+  .agent-picker {
+    width: 40px; height: 40px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.18);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s;
+    position: relative;
+    border: 2px solid transparent;
+    color: #555;
+  }
+  .agent-picker:hover {
+    transform: scale(1.1);
+    box-shadow: 0 6px 18px rgba(0,0,0,0.25);
+  }
+  .agent-picker.active {
+    border-color: #1a73e8;
+    color: #1a73e8;
+    box-shadow: 0 6px 18px rgba(26,115,232,0.35);
+  }
+  .agent-picker .picker-svg {
+    width: 20px; height: 20px;
+    fill: none; stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round; stroke-linejoin: round;
+  }
+  .agent-picker .label {
+    position: absolute; right: 100%; margin-right: 8px;
+    background: rgba(20,20,30,0.92);
+    color: #fff;
+    padding: 4px 10px;
+    border-radius: 5px;
+    font-size: 11px;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s;
+  }
+  .agent-picker:hover .label { opacity: 1; }
+
+  /* 悬浮球当前 Agent 角标 */
+  .ball-agent-badge {
+    position: absolute;
+    bottom: -2px; right: -2px;
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    background: #fff;
+    border: 2px solid #fff;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px;
+  }
+  .ball-agent-badge.connect { color: #10b981; }
+  .ball-agent-badge.cloud { color: #8b5cf6; }
+  .ball-agent-badge.xiaoai { color: #1a73e8; }
+
+  /* ===== Toast ===== */
+  .toast {
+    position: fixed;
+    bottom: 80px; left: 50%; transform: translateX(-50%);
+    background: rgba(20,20,30,0.92);
+    color: #fff;
+    padding: 10px 18px;
+    border-radius: 6px;
+    font-size: 13px;
+    z-index: 10000;
+    opacity: 0;
+    transition: opacity 0.3s, transform 0.3s;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* ===== 划词工具条 ===== */
+  .selection-toolbar {
+    position: fixed;
+    background: #1d1d1f;
+    border-radius: 6px;
+    padding: 4px;
+    display: flex;
+    gap: 2px;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+    z-index: 9300;
+    opacity: 0; transform: translateY(-4px);
+    transition: opacity 0.15s, transform 0.15s;
+    pointer-events: none;
+  }
+  .selection-toolbar.show { opacity: 1; transform: translateY(0); pointer-events: auto; }
+  .selection-toolbar .tool {
+    padding: 6px 10px;
+    color: #fff;
+    font-size: 11px;
+    border-radius: 4px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .selection-toolbar .tool:hover { background: rgba(255,255,255,0.15); }
+  .selection-toolbar .divider { width: 1px; background: #444; margin: 4px 2px; padding: 0; cursor: default; }
+
+  /* 划词结果卡片 */
+  .selection-result {
+    position: fixed;
+    width: 320px;
+    background: #fff;
+    border-radius: 10px;
+    box-shadow: 0 12px 36px rgba(0,0,0,0.18);
+    overflow: hidden;
+    z-index: 9300;
+    opacity: 0; transform: translateY(-4px) scale(0.97);
+    transition: opacity 0.18s, transform 0.18s;
+    pointer-events: none;
+  }
+  .selection-result.show { opacity: 1; transform: translateY(0) scale(1); pointer-events: auto; }
+  .sr-header {
+    background: #f5f6f8; padding: 8px 14px;
+    font-size: 11px; color: #666;
+    display: flex; align-items: center; gap: 6px;
+    justify-content: space-between;
+  }
+  .sr-header .close { cursor: pointer; color: #999; }
+  .sr-header .close:hover { color: #333; }
+  .sr-body { padding: 12px 14px; font-size: 12.5px; line-height: 1.7; color: #1d1d1f; }
+  .sr-footer {
+    padding: 8px 14px; border-top: 1px solid #ebedf0;
+    display: flex; gap: 8px;
+  }
+  .sr-btn {
+    font-size: 11px; padding: 4px 10px;
+    border-radius: 4px; background: #f5f6f8; color: #555;
+    cursor: pointer;
+  }
+  .sr-btn:hover { background: #e8e9ec; }
+  .sr-btn.primary { background: #1a73e8; color: #fff; }
+  .sr-btn.primary:hover { background: #155bb5; }
+
+  /* 让 Word 文档内文字可选 */
+  .app-body, .app-body * { user-select: text; }
+
+  /* 划词二级菜单（改写风格选择） */
+  .sub-menu {
+    position: fixed;
+    background: #1d1d1f;
+    border-radius: 6px;
+    padding: 4px;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+    z-index: 9400;
+    opacity: 0; transform: translateY(-4px);
+    transition: opacity 0.15s, transform 0.15s;
+    pointer-events: none;
+    display: flex; flex-direction: column; gap: 2px;
+    min-width: 110px;
+  }
+  .sub-menu.show { opacity: 1; transform: translateY(0); pointer-events: auto; }
+  .sub-menu .sub-item {
+    padding: 6px 12px;
+    color: #fff;
+    font-size: 11px;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  .sub-menu .sub-item:hover { background: rgba(255,255,255,0.15); }
+
+  /* ===== AI 鼠标遮罩 ===== */
+  .mouse-mask {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.45);
+    z-index: 9500;
+    cursor: crosshair;
+    display: none;
+  }
+  .mouse-mask.show { display: block; }
+  .mouse-rect {
+    position: fixed;
+    border: 2px solid #1a73e8;
+    background: rgba(26,115,232,0.08);
+    box-shadow: 0 0 0 9999px rgba(0,0,0,0.55);
+    z-index: 9501;
+    display: none;
+    pointer-events: none;
+  }
+  .mouse-rect.show { display: block; }
+  .mouse-hint {
+    position: fixed;
+    background: #1d1d1f;
+    color: #fff;
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-size: 11px;
+    z-index: 9502;
+    pointer-events: none;
+    display: none;
+  }
+  .mouse-hint.show { display: block; }
+
+  /* AI 鼠标结果浮窗 */
+  .mouse-result {
+    position: fixed;
+    width: 380px;
+    background: #fff;
+    border-radius: 10px;
+    box-shadow: 0 16px 48px rgba(0,0,0,0.3);
+    overflow: hidden;
+    z-index: 9600;
+    display: none;
+  }
+  .mouse-result.show { display: block; }
+  .mr-preview {
+    height: 80px;
+    background: #f0f2f5 url('') center/contain no-repeat;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; color: #777;
+    border-bottom: 1px solid #ebedf0;
+  }
+  .mr-body { padding: 14px; font-size: 12.5px; line-height: 1.7; color: #333; min-height: 60px; }
+  .mr-footer {
+    padding: 10px 14px; border-top: 1px solid #ebedf0;
+    display: flex; gap: 8px;
+  }
+
+  /* 全屏遮罩 */
+  .fullscreen-mask {
+    position: fixed; inset: 0;
+    background: #000;
+    z-index: 9700;
+    display: none;
+    color: #fff;
+    align-items: center; justify-content: center;
+    flex-direction: column;
+    gap: 16px;
+    font-size: 14px;
+  }
+  .fullscreen-mask.show { display: flex; }
+  .fullscreen-mask button {
+    background: rgba(255,255,255,0.15);
+    border: 1px solid rgba(255,255,255,0.3);
+    color: #fff;
+    padding: 8px 20px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+  }
+  .fullscreen-mask button:hover { background: rgba(255,255,255,0.25); }
+
+  /* ===== 任务栏 ===== */
+  .taskbar {
+    position: fixed; left: 0; right: 0; bottom: 0;
+    height: 44px;
+    background: rgba(20,20,30,0.85);
+    backdrop-filter: blur(20px);
+    display: flex; align-items: center; gap: 6px;
+    padding: 0 12px;
+    z-index: 5000;
+  }
+  .taskbar-icon {
+    width: 32px; height: 32px; border-radius: 4px;
+    background: rgba(255,255,255,0.1);
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 13px;
+    cursor: pointer;
+  }
+  .taskbar-icon:hover { background: rgba(255,255,255,0.2); }
+  .taskbar-icon.recall {
+    background: linear-gradient(135deg, #1a73e8, #4a90e2);
+    display: none;
+  }
+  .taskbar-icon.recall.show { display: flex; }
+  .taskbar-tray {
+    margin-left: auto; color: #cfd1d6; font-size: 12px;
+    display: flex; gap: 14px; align-items: center;
+  }
+
+  /* 拖拽预览 ghost */
+  .drag-ghost {
+    position: fixed;
+    pointer-events: none;
+    z-index: 9999;
+    opacity: 0.85;
+    transform: scale(0.95);
+  }
+</style>
+</head>
+<body>
+
+<!-- 右上角：AI 看屏入口 -->
+<div class="hint-toggle" onclick="startMouseCapture()">
+  <span>AI 看屏</span>
+</div>
+
+<!-- 右上角：模拟任务栏托盘入口 -->
+<div class="hint-toggle" style="right:108px;" onclick="toggleTrayPanel(event)">
+  <span>托盘入口</span>
+</div>
+
+<!-- 任务栏托盘面板 -->
+<div class="tray-panel" id="trayPanel">
+  <div class="tray-device-name">Xiaomi MIX Flip 2</div>
+  <div class="tray-action" onclick="trayAction('启用热点')">
+    <span class="tray-icon">
+      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 007 7l4-4a5 5 0 00-7-7"/><path d="M14 11a5 5 0 00-7-7L3 8a5 5 0 007 7"/></svg>
+    </span>
+    <span>启用热点</span>
+  </div>
+  <div class="tray-action" onclick="trayAction('妙享桌面')">
+    <span class="tray-icon">
+      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="14" rx="2"/><path d="M14 8v6"/></svg>
+    </span>
+    <span>妙享桌面</span>
+  </div>
+  <div class="tray-divider"></div>
+  <div class="tray-item" onclick="trayAction('发送文件')">发送文件</div>
+  <div class="tray-divider"></div>
+  <div class="tray-item" onclick="trayAction('设置')">设置</div>
+</div>
+
+<!-- 桌面 -->
+<div class="desktop">
+  <!-- 模拟应用窗口 -->
+  <div class="app-window" style="left:5%; top:8%; width:46%; height:62%;">
+    <div class="app-titlebar">
+      <span>项目周报.docx — Word</span>
+      <div class="win-controls"><span>—</span><span>□</span><span class="close">✕</span></div>
+    </div>
+    <div class="app-body">
+      <p style="font-size:14px;font-weight:600;margin-bottom:8px;">本周工作进展</p>
+      <p>1. 完成融合方案 PRD 第 4 章评审，进入开发评估阶段</p>
+      <p>2. 与设计团队对齐三入口（悬浮球 / 划词 / 鼠标）原型设计标准</p>
+      <p>3. 跨设备中转 P0 范围确认，覆盖手机、平板</p>
+      <p>4. 隐私红线评审通过，明确不做后台监听</p>
+      <br>
+      <p style="font-size:14px;font-weight:600;margin-bottom:8px;">参考资料</p>
+      <p>Quantum supremacy was achieved in 2019, but practical applications remained limited. In 2026, IBM and Google demonstrated fault-tolerant quantum computers capable of running optimization tasks in pharmaceuticals and finance.</p>
+      <br>
+      <p style="font-size:11px;color:#888;">💡 试试选中上面任意一段文字，看划词工具条</p>
+    </div>
+  </div>
+
+  <!-- Windows 风格桌面图标 -->
+  <div class="file-card" data-name="融合方案 PRD.pdf" style="left:60%; top:6%;">
+    <div class="file-icon">
+      <svg viewBox="0 0 48 56" xmlns="http://www.w3.org/2000/svg">
+        <path d="M4 0 H30 L44 14 V52 A4 4 0 0 1 40 56 H4 A4 4 0 0 1 0 52 V4 A4 4 0 0 1 4 0 Z" fill="#fff"/>
+        <path d="M30 0 V14 H44" fill="#e0e0e0"/>
+        <rect x="4" y="32" width="36" height="16" rx="2" fill="#e74c3c"/>
+        <text x="22" y="44" font-size="9" font-weight="700" fill="#fff" text-anchor="middle" font-family="Arial">PDF</text>
+      </svg>
+    </div>
+    <div class="file-name">融合方案 PRD.pdf</div>
+  </div>
+
+  <div class="file-card" data-name="界面截图.png" style="left:60%; top:32%;">
+    <div class="file-icon">
+      <svg viewBox="0 0 48 56" xmlns="http://www.w3.org/2000/svg">
+        <path d="M4 0 H30 L44 14 V52 A4 4 0 0 1 40 56 H4 A4 4 0 0 1 0 52 V4 A4 4 0 0 1 4 0 Z" fill="#fff"/>
+        <path d="M30 0 V14 H44" fill="#e0e0e0"/>
+        <rect x="6" y="22" width="32" height="22" rx="2" fill="#f59e0b"/>
+        <circle cx="14" cy="29" r="2.5" fill="#fff"/>
+        <path d="M6 40 L18 30 L26 36 L38 26 L38 44 H6 Z" fill="#fff" opacity="0.9"/>
+      </svg>
+    </div>
+    <div class="file-name">界面截图.png</div>
+  </div>
+
+  <div class="file-card" data-name="会议纪要.txt" style="left:71%; top:6%;">
+    <div class="file-icon">
+      <svg viewBox="0 0 48 56" xmlns="http://www.w3.org/2000/svg">
+        <path d="M4 0 H30 L44 14 V52 A4 4 0 0 1 40 56 H4 A4 4 0 0 1 0 52 V4 A4 4 0 0 1 4 0 Z" fill="#fff"/>
+        <path d="M30 0 V14 H44" fill="#e0e0e0"/>
+        <line x1="8" y1="24" x2="36" y2="24" stroke="#666" stroke-width="2"/>
+        <line x1="8" y1="32" x2="36" y2="32" stroke="#666" stroke-width="2"/>
+        <line x1="8" y1="40" x2="28" y2="40" stroke="#666" stroke-width="2"/>
+      </svg>
+    </div>
+    <div class="file-name">会议纪要.txt</div>
+  </div>
+
+  <div class="file-card" data-name="main.py" style="left:71%; top:32%;">
+    <div class="file-icon">
+      <svg viewBox="0 0 48 56" xmlns="http://www.w3.org/2000/svg">
+        <path d="M4 0 H30 L44 14 V52 A4 4 0 0 1 40 56 H4 A4 4 0 0 1 0 52 V4 A4 4 0 0 1 4 0 Z" fill="#fff"/>
+        <path d="M30 0 V14 H44" fill="#e0e0e0"/>
+        <rect x="4" y="32" width="36" height="16" rx="2" fill="#3776ab"/>
+        <text x="22" y="44" font-size="9" font-weight="700" fill="#fff" text-anchor="middle" font-family="Arial">PY</text>
+      </svg>
+    </div>
+    <div class="file-name">main.py</div>
+  </div>
+</div>
+
+<!-- 悬浮球 -->
+<div class="ball" id="ball" style="right:18px; top:46%;">
+  <svg viewBox="0 0 24 24" class="ball-icon"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg>
+  <span class="ball-badge" id="ballBadge"></span>
+</div>
+
+<!-- Agent 切换小图标（悬停弹出） -->
+<div class="agent-pickers" id="agentPickers">
+  <div class="agent-picker" data-agent="connect" onclick="setAgent('connect'); openMainAppFromBall();">
+    <span class="label">互联助手</span>
+    <svg viewBox="0 0 24 24" class="picker-svg"><rect x="3" y="6" width="8" height="12" rx="1.5"/><rect x="13" y="9" width="8" height="9" rx="1.5"/><path d="M11 12h2"/></svg>
+  </div>
+  <div class="agent-picker" data-agent="cloud" onclick="setAgent('cloud'); openMainAppFromBall();">
+    <span class="label">云服务助手</span>
+    <svg viewBox="0 0 24 24" class="picker-svg"><path d="M7 18a4 4 0 010-8 5 5 0 019.7-1A4.5 4.5 0 0117 18H7z"/></svg>
+  </div>
+  <div class="agent-picker" data-agent="xiaoai" onclick="setAgent('xiaoai'); openMainAppFromBall();">
+    <span class="label">超级小爱</span>
+    <svg viewBox="0 0 24 24" class="picker-svg"><path d="M12 3l1.8 4.5L18 9.3l-4 3.2 1.2 5L12 14.8 8.8 17.5 10 12.5 6 9.3l4.2-1.8z"/></svg>
+  </div>
+</div>
+
+<!-- 候选操作面板已移除：拖拽统一进当前 Agent 主 App -->
+<div class="drag-options" id="dragOptions" style="display:none;"></div>
+
+<!-- 工具盘 -->
+<div class="tool-pan" id="toolPan">
+  <div class="t" data-tool="截图"><svg viewBox="0 0 24 24"><path d="M9 4h6l1 2h3a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h3l1-2z"/><circle cx="12" cy="13" r="3"/></svg>截图</div>
+  <div class="t" data-tool="翻译"><svg viewBox="0 0 24 24"><path d="M4 8h16M4 16h10M14 4l4 4-4 4"/></svg>翻译</div>
+  <div class="t" data-tool="速记"><svg viewBox="0 0 24 24"><path d="M12 19l7-7 3 3-7 7-3-3z M18 13l-1.5-1.5 M2 19h7"/></svg>速记</div>
+  <div class="t" data-tool="朗读"><svg viewBox="0 0 24 24"><path d="M11 5L6 9H2v6h4l5 4V5zM15 9a3 3 0 010 6M19 5a8 8 0 010 14"/></svg>朗读</div>
+  <div class="t" data-tool="搜索"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/></svg>搜索</div>
+  <div class="t" data-tool="发到手机"><svg viewBox="0 0 24 24"><rect x="6" y="2" width="12" height="20" rx="2"/><circle cx="12" cy="18" r="1"/></svg>发到手机</div>
+</div>
+
+<!-- 右键菜单 -->
+<div class="ball-menu" id="ballMenu" style="display:none;">
+  <div class="item" onclick="closeMenu(); openMainApp();">打开主 App</div>
+  <div class="divider"></div>
+  <div class="group-label">默认助手</div>
+  <div class="item agent-item" id="menu-connect" onclick="closeMenu(); setAgent('connect'); showToast('默认助手已切到「互联助手」');">
+    <svg viewBox="0 0 24 24" class="agent-svg"><rect x="3" y="6" width="8" height="12" rx="1.5"/><rect x="13" y="9" width="8" height="9" rx="1.5"/><path d="M11 12h2"/></svg>
+    <span>互联助手</span>
+    <span class="check" id="check-connect" style="display:none;">✓</span>
+  </div>
+  <div class="item agent-item" id="menu-cloud" onclick="closeMenu(); setAgent('cloud'); showToast('默认助手已切到「云服务助手」');">
+    <svg viewBox="0 0 24 24" class="agent-svg"><path d="M7 18a4 4 0 010-8 5 5 0 019.7-1A4.5 4.5 0 0117 18H7z"/></svg>
+    <span>云服务助手</span>
+    <span class="check" id="check-cloud" style="display:none;">✓</span>
+  </div>
+  <div class="item agent-item" id="menu-xiaoai" onclick="closeMenu(); setAgent('xiaoai'); showToast('默认助手已切到「超级小爱」');">
+    <svg viewBox="0 0 24 24" class="agent-svg"><path d="M12 3l1.8 4.5L18 9.3l-4 3.2 1.2 5L12 14.8 8.8 17.5 10 12.5 6 9.3l4.2-1.8z"/></svg>
+    <span>超级小爱</span>
+    <span class="check" id="check-xiaoai" style="display:none;">✓</span>
+  </div>
+  <div class="divider"></div>
+  <div class="item" onclick="closeMenu(); hideBall(); showToast('已隐藏 · 任务栏图标或 Alt+Space 召回');">隐藏</div>
+  <div class="divider"></div>
+  <div class="item" onclick="closeMenu(); showToast('打开设置面板（Demo 不实现）');">设置...</div>
+</div>
+
+<!-- 对话小窗（已废弃，悬浮球点击直接打开主 App；保留隐藏空壳避免引用报错） -->
+<div class="ball-popup" id="popup" style="display:none;">
+  <div class="popup-body" id="popupBody"></div>
+  <div class="popup-input"><input id="popupInput" type="text" /></div>
+  <span class="popup-mode" id="modeBtn"></span>
+  <div class="mode-dropdown" id="modeDropdown"></div>
+</div>
+
+<!-- 划词工具条 -->
+<div class="selection-toolbar" id="selToolbar">
+  <div class="tool" data-action="翻译">翻译</div>
+  <div class="tool" data-action="解释">解释</div>
+  <div class="tool" data-action="改写">改写</div>
+  <div class="tool divider"></div>
+  <div class="tool" data-action="问小爱">问小爱</div>
+</div>
+
+<!-- 划词二级菜单（改写风格） -->
+<div class="sub-menu" id="subMenu">
+  <div class="sub-item" data-style="润色">润色</div>
+  <div class="sub-item" data-style="简化">简化</div>
+  <div class="sub-item" data-style="正式">正式</div>
+  <div class="sub-item" data-style="口语">口语</div>
+</div>
+
+<!-- 划词结果卡片 -->
+<div class="selection-result" id="selResult">
+  <div class="sr-header">
+    <span id="srTitle">翻译</span>
+    <span class="close" onclick="hideSelResult()">✕</span>
+  </div>
+  <div class="sr-body" id="srBody"></div>
+  <div class="sr-footer">
+    <span class="sr-btn" onclick="showToast('已复制')">复制</span>
+    <span class="sr-btn primary" onclick="hideSelResult(); openMainApp({source:'selection'});">在主 App 中继续 →</span>
+  </div>
+</div>
+
+<!-- 提示气泡（已移除） -->
+
+<!-- AI 鼠标遮罩 -->
+<div class="mouse-mask" id="mouseMask"></div>
+<div class="mouse-rect" id="mouseRect"></div>
+<div class="mouse-hint" id="mouseHint">拖出矩形圈选区域 · ESC 取消</div>
+
+<!-- AI 鼠标结果浮窗 -->
+<div class="mouse-result" id="mouseResult">
+  <div class="mr-preview" id="mrPreview">📷 已识别区域</div>
+  <div class="mr-body" id="mrBody">处理中...</div>
+  <div class="mr-footer">
+    <span class="sr-btn" onclick="hideMouseResult()">关闭</span>
+    <span class="sr-btn" onclick="showToast('已复制')">复制</span>
+    <span class="sr-btn primary" onclick="hideMouseResult(); openMainApp({source:'mouse'});">在主 App 中继续 →</span>
+  </div>
+</div>
+
+<!-- 全屏模拟 -->
+<div class="fullscreen-mask" id="fsMask">
+  <div>🎬 模拟全屏应用（视频/游戏）</div>
+  <div style="font-size:12px;opacity:0.7;">悬浮球已自动隐藏，避免遮挡内容</div>
+  <button onclick="exitFullscreen()">退出全屏</button>
+</div>
+
+<!-- 小米互联服务（三栏 App，互联助手 / 云服务助手共用） -->
+<div class="miclaw-app" id="miclawApp">
+  <div class="ma-titlebar">
+    <div class="ma-traffic">
+      <span class="dot red" onclick="closeMiclawApp()"></span>
+      <span class="dot yellow"></span>
+      <span class="dot green"></span>
+    </div>
+    <div class="ma-title">小米互联服务</div>
+    <div style="width:54px;"></div>
+  </div>
+  <div class="ma-body">
+    <!-- 左栏 -->
+    <aside class="ma-side">
+      <div class="ma-side-item" data-page="device" onclick="switchMaPage('device')">🔗 设备互联</div>
+      <div class="ma-side-item" data-page="transfer" onclick="switchMaPage('transfer')">📤 小米互传</div>
+      <div class="ma-side-divider">云服务</div>
+      <div class="ma-side-item" data-page="album" onclick="switchMaPage('album')">📷 云相册</div>
+      <div class="ma-side-item" data-page="note" onclick="switchMaPage('note')">📝 云笔记</div>
+      <div class="ma-side-item" data-page="find" onclick="switchMaPage('find')">📍 查找设备</div>
+      <div class="ma-side-divider" style="margin-top:12px;"></div>
+      <div class="ma-side-xiaoai" onclick="closeMiclawApp(); openXiaoaiWindow();">
+        <span style="display:inline-block;width:18px;height:18px;border-radius:50%;background:linear-gradient(135deg,#1a73e8,#8b5cf6);display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px;">✦</span>
+        超级小爱
+      </div>
+    </aside>
+
+    <!-- 中栏：设备互联 -->
+    <main class="ma-mid" id="ma-page-device">
+      <div class="ma-mid-header">
+        <div class="ma-mid-title">设备互联</div>
+        <div class="ma-mid-tabs">
+          <div class="ma-mid-tab active">手机</div>
+          <div class="ma-mid-tab">平板</div>
+        </div>
+      </div>
+      <div class="ma-device-current">
+        <div class="ma-device-name">Xiaomi 17 Pro <span class="arrow">▾</span></div>
+        <div class="ma-device-meta">局域网连接</div>
+        <div class="ma-device-mock"></div>
+        <div class="ma-device-actions">
+          <div class="ma-device-action">🔗 启用热点</div>
+          <div class="ma-device-action">🔔 响铃查找</div>
+        </div>
+      </div>
+      <div class="ma-feature-card">
+        <div class="ma-feature-title">妙享桌面</div>
+        <div class="ma-feature-sub">打开手机屏幕或最近在手机上使用的应用</div>
+        <div class="ma-feature-grid">
+          <div class="ma-feature-item"><span class="icon">📱</span>妙享桌面</div>
+          <div class="ma-feature-item"><span class="icon">🖼</span>相册</div>
+          <div class="ma-feature-item"><span class="icon">📁</span>文件管理</div>
+          <div class="ma-feature-item"><span class="icon">🌐</span>浏览器</div>
+          <div class="ma-feature-item"><span class="icon">💬</span>短信</div>
+        </div>
+      </div>
+    </main>
+
+    <!-- 中栏：云相册（占位）-->
+    <main class="ma-mid" id="ma-page-album" style="display:none;">
+      <div class="ma-mid-header">
+        <div class="ma-mid-title">云相册</div>
+        <div class="ma-mid-tabs"><div class="ma-mid-tab active">全部</div><div class="ma-mid-tab">最近</div></div>
+      </div>
+      <div class="ma-cloud-grid" id="cloudAlbumGrid"></div>
+    </main>
+
+    <!-- 中栏：云笔记（占位）-->
+    <main class="ma-mid" id="ma-page-note" style="display:none;">
+      <div class="ma-mid-header">
+        <div class="ma-mid-title">云笔记</div>
+      </div>
+      <div style="color:#888;font-size:13px;">128 条笔记 · 已同步</div>
+    </main>
+
+    <!-- 中栏：查找设备（占位） -->
+    <main class="ma-mid" id="ma-page-find" style="display:none;">
+      <div class="ma-mid-header"><div class="ma-mid-title">查找设备</div></div>
+      <div style="color:#888;font-size:13px;">5 台设备已绑定查找</div>
+    </main>
+
+    <!-- 中栏：小米互传（占位） -->
+    <main class="ma-mid" id="ma-page-transfer" style="display:none;">
+      <div class="ma-mid-header"><div class="ma-mid-title">小米互传</div></div>
+      <div style="color:#888;font-size:13px;">拖文件到此处发送 / 接收文件夹自动保存</div>
+    </main>
+
+    <!-- 右栏：业务助手对话 -->
+    <aside class="ma-agent">
+      <div class="ma-agent-head" id="maAgentHead">
+        <span class="av">🔗</span>
+        <span id="maAgentName">互联助手</span>
+        <div class="actions">✎ ⋯</div>
+      </div>
+      <div class="ma-agent-body" id="maAgentBody">
+        <div class="ma-msg user">让 Xiaomi Pad 7 响铃</div>
+        <div class="ma-msg ai-avatar"><span class="a">🔗</span><div class="ma-msg ai" style="margin:0;">已让 Xiaomi Pad 7 开始响铃。如果还是找不到，要我帮你查一下最后位置吗？</div></div>
+      </div>
+      <div class="ma-agent-input">
+        <div class="ma-agent-input-box">
+          <textarea placeholder="和小爱对话，或 @ 设备帮你做事"></textarea>
+          <div class="ma-agent-input-toolbar">
+            <span style="color:#aaa;font-size:14px;">⊕</span>
+            <div class="ma-agent-send">↑</div>
+          </div>
+        </div>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<!-- 超级小爱独立窗口（点击悬浮球或左下角"超级小爱"入口唤起） -->
+<div class="miclaw-window" id="miclawWindow">
+  <div class="miclaw-titlebar">
+    <div class="miclaw-traffic">
+      <span class="dot red" onclick="closeMiclaw()"></span>
+      <span class="dot yellow"></span>
+      <span class="dot green"></span>
+    </div>
+    <div class="miclaw-title" id="miclawTitle">小米互联服务</div>
+    <div style="width:54px;"></div>
+  </div>
+  <div class="miclaw-body">
+    <!-- 左栏（按 Agent 切换） -->
+    <aside class="miclaw-side" id="agentSide-connect">
+      <div class="miclaw-new">
+        <svg viewBox="0 0 24 24" style="width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;"><path d="M12 5v14M5 12h14"/></svg>
+        新建对话
+      </div>
+      <div class="miclaw-side-divider" style="margin-top:0;">已连接的设备</div>
+      <div class="miclaw-side-item">📱 小米 14 · 在线</div>
+      <div class="miclaw-side-item">📱 红米 K70 · 在线</div>
+      <div class="miclaw-side-item">📋 小米平板 6 · 离线</div>
+      <div class="miclaw-side-item">📺 客厅小米电视 · 在线</div>
+      <div class="miclaw-side-divider">最近</div>
+      <div class="miclaw-side-history">把 PRD 发到我手机</div>
+      <div class="miclaw-side-history">让 Pad 7 响铃</div>
+      <div class="miclaw-side-history">投屏到电视</div>
+      <div class="miclaw-side-history">连手机热点</div>
+      <div style="margin-top:auto; padding-top:12px; border-top:1px solid #f0f1f3;">
+        <div class="miclaw-side-item" onclick="showToast('打开小米互联服务主窗口')">
+          🔗 打开主窗口
+        </div>
+      </div>
+    </aside>
+
+    <aside class="miclaw-side" id="agentSide-cloud" style="display:none;">
+      <div class="miclaw-new">
+        <svg viewBox="0 0 24 24" style="width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;"><path d="M12 5v14M5 12h14"/></svg>
+        新建对话
+      </div>
+      <div class="miclaw-side-divider" style="margin-top:0;">云数据</div>
+      <div class="miclaw-side-item">📷 云相册 · 2,486 张</div>
+      <div class="miclaw-side-item">📝 云笔记 · 128 条</div>
+      <div class="miclaw-side-item">📁 云盘 · 124 GB</div>
+      <div class="miclaw-side-item">📍 查找设备</div>
+      <div class="miclaw-side-divider">最近</div>
+      <div class="miclaw-side-history">找上周三亚的照片</div>
+      <div class="miclaw-side-history">搜关于 PRD 的笔记</div>
+      <div class="miclaw-side-history">看下我手机在哪</div>
+    </aside>
+
+    <aside class="miclaw-side" id="agentSide-xiaoai" style="display:none;">
+      <div class="miclaw-new">
+        <svg viewBox="0 0 24 24" style="width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;"><path d="M12 5v14M5 12h14"/></svg>
+        新建对话
+      </div>
+      <div class="miclaw-side-item">🔄 跨设备 session</div>
+      <div class="miclaw-side-item">💡 灵感广场</div>
+      <div class="miclaw-side-item">📁 文件</div>
+      <div class="miclaw-side-item">⏰ 定时任务</div>
+      <div class="miclaw-side-divider">对话记录</div>
+      <div class="miclaw-side-divider" style="margin-top:6px;color:#bbb;">今天</div>
+      <div class="miclaw-side-history">让 Pad 7 响铃</div>
+      <div class="miclaw-side-history dot">整理大理丽江行程</div>
+      <div class="miclaw-side-history">挑 9 张做九宫格</div>
+      <div class="miclaw-side-history dot">明天天气和穿搭建议</div>
+      <div class="miclaw-side-history">生成一个粉色爱心动画网页</div>
+      <div class="miclaw-side-divider" style="color:#bbb;">昨天</div>
+      <div class="miclaw-side-history">查 Xiaomi 17 Pro 位置</div>
+      <div class="miclaw-side-history">按品类排序双十一清单</div>
+      <div class="miclaw-side-history">周报数据分析</div>
+      <div class="miclaw-side-history">推荐成都好吃的火锅店</div>
+    </aside>
+
+    <!-- 主区（按 Agent 切换欢迎语和气泡） -->
+    <main class="miclaw-main">
+      <div class="miclaw-welcome" id="agentMain-connect">
+        <div class="miclaw-logo" style="color:#10b981;">
+          <svg viewBox="0 0 24 24"><path d="M9 11a3 3 0 100 6 3 3 0 000-6zm6-2a3 3 0 100 6 3 3 0 000-6zM2 12s3-6 10-6 10 6 10 6-3 6-10 6S2 12 2 12z"/></svg>
+        </div>
+        <div class="miclaw-h1">Hi, 我是互联助手</div>
+        <div class="miclaw-sub">让你的小米设备一句话联动 · 传文件 / 投屏 / 设备 / 热点</div>
+        <div class="miclaw-suggestions">
+          <div class="miclaw-sug" onclick="askMiclaw('connect','把这份 PRD 发到我手机')">📤 把文件发到手机</div>
+          <div class="miclaw-sug" onclick="askMiclaw('connect','投屏到客厅电视')">📺 投屏到电视</div>
+          <div class="miclaw-sug" onclick="askMiclaw('connect','用我手机的热点联网')">📶 用手机热点</div>
+          <div class="miclaw-sug" onclick="askMiclaw('connect','让小米 14 响铃')">🔔 让设备响铃</div>
+        </div>
+      </div>
+
+      <div class="miclaw-welcome" id="agentMain-cloud" style="display:none;">
+        <div class="miclaw-logo" style="color:#8b5cf6;">
+          <svg viewBox="0 0 24 24"><path d="M18 10h-1.26A8 8 0 109 20h9a5 5 0 000-10z"/></svg>
+        </div>
+        <div class="miclaw-h1">Hi, 我是云服务助手</div>
+        <div class="miclaw-sub">在云相册 / 云笔记 / 云盘里帮你找内容、整理、跨设备同步</div>
+        <div class="miclaw-suggestions">
+          <div class="miclaw-sug" onclick="askMiclaw('cloud','找上周三亚的照片')">📷 找特定照片</div>
+          <div class="miclaw-sug" onclick="askMiclaw('cloud','搜下关于 PRD 的笔记')">📝 搜云笔记</div>
+          <div class="miclaw-sug" onclick="askMiclaw('cloud','整理今年的家庭照片')">🖼 整理相册</div>
+          <div class="miclaw-sug" onclick="askMiclaw('cloud','看下我手机在哪')">📍 查找设备</div>
+        </div>
+      </div>
+
+      <div class="miclaw-welcome" id="agentMain-xiaoai" style="display:none;">
+        <div class="miclaw-logo" style="color:#1a73e8;">
+          <svg viewBox="0 0 24 24"><path d="M12 1l3 7 7 3-7 3-3 7-3-7-7-3 7-3z"/></svg>
+        </div>
+        <div class="miclaw-h1">Hi, 我是超级小爱</div>
+        <div class="miclaw-sub">你的全生态 AI 助手 · 能问、能做、能记住</div>
+        <div class="miclaw-suggestions">
+          <div class="miclaw-sug">🎨 生成网页</div>
+          <div class="miclaw-sug">🧭 出行建议</div>
+          <div class="miclaw-sug">🗂 整理桌面</div>
+          <div class="miclaw-sug">🔔 同步手机通知</div>
+        </div>
+      </div>
+
+      <div class="miclaw-input-wrap">
+        <div class="miclaw-context" id="miclawContext">
+          <span id="miclawContextText"></span>
+          <span class="ctx-close" onclick="this.parentElement.classList.remove('show')">✕</span>
+        </div>
+        <div class="miclaw-input">
+          <textarea id="miclawTextarea" placeholder="发消息或 @ 设备帮你做事"></textarea>
+          <div class="miclaw-input-toolbar">
+            <div class="miclaw-attach">
+              <svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;"><path d="M21 11.5a8.38 8.38 0 01-9 8.5 8.5 8.5 0 01-7.6-11.5L8 4l1.5 1.5L6 9.5l-1 4 4-1 4.5-3.5 1.5 1.5-3.5 4 4 1z"/></svg>
+            </div>
+            <div class="miclaw-send">
+              <svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:none;stroke:#fff;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;"><path d="M5 12l14-7-7 14-2-5-5-2z"/></svg>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<!-- 任务栏 -->
+<div class="taskbar">
+  <div class="taskbar-icon">⊞</div>
+  <div class="taskbar-icon">🔍</div>
+  <div class="taskbar-icon">W</div>
+  <div class="taskbar-icon">E</div>
+  <div class="taskbar-icon recall" id="recallIcon" onclick="showBall()" title="召回悬浮球（Alt+Space）">
+    <svg viewBox="0 0 24 24" style="width:18px;height:18px;fill:none;stroke:#fff;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg>
+  </div>
+  <div class="taskbar-tray">
+    <span id="time">14:32</span>
+    <span>2026/06/02</span>
+  </div>
+</div>
+
+<script>
+(function(){
+  const ball = document.getElementById('ball');
+  const popup = document.getElementById('popup');
+  const dragOptions = document.getElementById('dragOptions');
+  const toolPan = document.getElementById('toolPan');
+  const ballMenu = document.getElementById('ballMenu');
+  const tooltip = null; // 已移除
+  const toast = document.getElementById('toast');
+  const recallIcon = document.getElementById('recallIcon');
+  const popupBody = document.getElementById('popupBody');
+  const popupInput = document.getElementById('popupInput');
+  const modeBtn = document.getElementById('modeBtn');
+  const modeDropdown = document.getElementById('modeDropdown');
+
+  // 暴露给 onclick
+  window.showToast = showToast;
+  window.openPopup = openPopup;
+  window.closePopup = closePopup;
+  window.hideBall = hideBall;
+  window.showBall = showBall;
+  window.closeMenu = () => ballMenu.style.display = 'none';
+  window.sendMsg = sendMsg;
+  window.reset = reset;
+  window.ball = ball;
+  window.toggleHint = () => {};
+
+  // ===== 任务栏托盘面板 =====
+  const trayPanel = document.getElementById('trayPanel');
+  window.toggleTrayPanel = function(ev){
+    if (ev) ev.stopPropagation();
+    trayPanel.classList.toggle('show');
+  };
+  window.trayAction = function(name){
+    trayPanel.classList.remove('show');
+    showToast(`托盘入口 → ${name}`);
+  };
+  document.addEventListener('mousedown', (e) => {
+    if (!trayPanel.contains(e.target) &&
+        !(e.target.closest && e.target.closest('.hint-toggle'))) {
+      trayPanel.classList.remove('show');
+    }
+  });
+  window.openMainApp = openMainApp;
+
+  // 模拟后台任务：球转圈 3 秒 → 完成红点闪烁
+  const ballBadge = document.getElementById('ballBadge');
+  let bgTaskResult = null;
+  window.simulateBgTask = function(){
+    showToast('后台任务已启动：正在生成 PPT 大纲...');
+    ball.classList.add('busy');
+    setTimeout(() => {
+      ball.classList.remove('busy');
+      ballBadge.classList.add('show');
+      bgTaskResult = '已为你生成「Q3 项目周报 PPT 大纲」，包含 5 个章节。点击查看完整结果。';
+      showToast('任务已完成，点悬浮球查看结果');
+    }, 3000);
+  };
+  function consumeBgTaskBadge(){
+    if (ballBadge.classList.contains('show')) {
+      ballBadge.classList.remove('show');
+      if (bgTaskResult) {
+        const a = document.createElement('div');
+        a.className = 'popup-msg';
+        a.textContent = '✓ 后台任务完成：' + bgTaskResult;
+        popupBody.appendChild(a);
+        popupBody.scrollTop = popupBody.scrollHeight;
+        bgTaskResult = null;
+      }
+    }
+  }
+  window.consumeBgTaskBadge = consumeBgTaskBadge;
+
+  // ===== 时间 =====
+  function updateTime(){
+    const d = new Date();
+    document.getElementById('time').textContent =
+      String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+  }
+  updateTime();
+  setInterval(updateTime, 30000);
+
+  // ===== Toast =====
+  let toastTimer;
+  function showToast(text){
+    toast.textContent = text;
+    toast.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toast.classList.remove('show'), 2200);
+  }
+
+  // ===== 悬浮球拖拽 =====
+  let isDragging = false;
+  let dragStarted = false;
+  let dragStartX, dragStartY, ballStartX, ballStartY;
+  let longPressTimer;
+
+  ball.addEventListener('mousedown', (e) => {
+    if (e.button !== 0) return; // 只响应左键
+    isDragging = true;
+    dragStarted = false;
+    const rect = ball.getBoundingClientRect();
+    dragStartX = e.clientX;
+    dragStartY = e.clientY;
+    ballStartX = rect.left;
+    ballStartY = rect.top;
+
+    e.preventDefault();
+  });
+
+  document.addEventListener('mousemove', (e) => {
+    if (!isDragging) return;
+    const dx = e.clientX - dragStartX;
+    const dy = e.clientY - dragStartY;
+    if (!dragStarted && (Math.abs(dx) > 5 || Math.abs(dy) > 5)) {
+      dragStarted = true;
+      ball.classList.add('dragging');
+    }
+    if (dragStarted) {
+      ball.style.left = (ballStartX + dx) + 'px';
+      ball.style.top = (ballStartY + dy) + 'px';
+      ball.style.right = 'auto';
+    }
+  });
+
+  document.addEventListener('mouseup', (e) => {
+    if (!isDragging) return;
+    isDragging = false;
+
+    if (dragStarted) {
+      // 距离最近边缘 ≤80px 才吸边，否则停在原地
+      const rect = ball.getBoundingClientRect();
+      const winW = window.innerWidth;
+      const distLeft = rect.left;
+      const distRight = winW - rect.right;
+      const minDist = Math.min(distLeft, distRight);
+
+      ball.classList.remove('dragging');
+
+      if (minDist <= 80) {
+        // 吸边
+        ball.style.transition = 'left 0.3s, right 0.3s';
+        if (distLeft < distRight) {
+          ball.style.left = '12px';
+          ball.style.right = 'auto';
+        } else {
+          ball.style.right = '18px';
+          ball.style.left = 'auto';
+        }
+        setTimeout(() => ball.style.transition = '', 320);
+      }
+      // 否则保持当前位置（已经通过 mousemove 设置好了）
+    } else {
+      // click：toggle popup
+      togglePopup();
+    }
+  });
+
+  // 右键菜单
+  ball.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    const rect = ball.getBoundingClientRect();
+    ballMenu.style.display = 'block';
+    let left = rect.left;
+    if (left + 200 > window.innerWidth) left = rect.right - 180;
+    ballMenu.style.left = left + 'px';
+    ballMenu.style.top = (rect.bottom + 6) + 'px';
+  });
+  document.addEventListener('click', (e) => {
+    if (!ballMenu.contains(e.target) && e.target !== ball) {
+      ballMenu.style.display = 'none';
+    }
+    if (!modeDropdown.contains(e.target) && e.target !== modeBtn) {
+      modeDropdown.classList.remove('show');
+    }
+  });
+
+  // ===== Hover tooltip 已移除（避免与 Agent picker 重叠） =====
+  // ball.addEventListener('mouseenter', ...) — 不再显示提示气泡
+
+  // ===== 工具盘 =====
+  function showToolPan(){
+    const rect = ball.getBoundingClientRect();
+    const isLeft = rect.left < window.innerWidth / 2;
+    let left = isLeft ? rect.right + 10 : rect.left - 220;
+    let top = rect.top - 80;
+    if (top < 50) top = rect.bottom + 10;
+    toolPan.style.left = left + 'px';
+    toolPan.style.top = top + 'px';
+    toolPan.classList.add('show');
+  }
+  function hideToolPan(){ toolPan.classList.remove('show'); }
+  document.addEventListener('click', (e) => {
+    if (!toolPan.contains(e.target) && e.target !== ball) hideToolPan();
+  });
+  toolPan.querySelectorAll('.t').forEach(t => {
+    t.addEventListener('click', () => {
+      hideToolPan();
+      showToast(`已触发：${t.dataset.tool}`);
+    });
+  });
+
+  // ===== 打开主 App（根据 Agent 路由到不同 App） =====
+  const miclawApp = document.getElementById('miclawApp');         // 小米互联服务（三栏）
+  const miclawWindow = document.getElementById('miclawWindow');   // 超级小爱独立窗口
+  const miclawContext = document.getElementById('miclawContext');
+  const miclawContextText = document.getElementById('miclawContextText');
+  const miclawTitle = document.getElementById('miclawTitle');
+  const maAgentHead = document.getElementById('maAgentHead');
+  const maAgentName = document.getElementById('maAgentName');
+
+  // Agent 元数据
+  const AGENTS = {
+    connect: { name: '互联助手', title: '小米互联服务', color: '#10b981', dot: 'linear-gradient(135deg,#10b981,#34d399)', icon: '🔗', desc: '设备 / 互传 / 投屏 / 热点', page: 'device' },
+    cloud:   { name: '云服务助手', title: '小米云服务',   color: '#8b5cf6', dot: 'linear-gradient(135deg,#8b5cf6,#a78bfa)', icon: '☁',  desc: '云相册 / 云笔记 / 云盘',   page: 'album' },
+    xiaoai:  { name: '超级小爱',   title: '超级小爱',     color: '#1a73e8', dot: 'linear-gradient(135deg,#1a73e8,#4a90e2)', icon: '✦',  desc: '通用对话 / 跨设备 / 灵感广场' },
+  };
+  let currentAgent = 'connect';
+
+  // 切换互联服务 App 内的中栏页面
+  function switchMaPage(page){
+    ['device','transfer','album','note','find'].forEach(p => {
+      const el = document.getElementById('ma-page-' + p);
+      if (el) el.style.display = (p === page) ? 'block' : 'none';
+    });
+    document.querySelectorAll('.ma-side-item').forEach(it => {
+      it.classList.toggle('active', it.dataset.page === page);
+    });
+    // 右栏助手根据当前页类型切换
+    const isCloud = ['album','note','find'].includes(page);
+    if (isCloud) {
+      maAgentHead.classList.add('cloud');
+      maAgentHead.querySelector('.av').textContent = '☁';
+      maAgentHead.querySelector('.av').style.background = 'linear-gradient(135deg,#8b5cf6,#a78bfa)';
+      maAgentName.textContent = '云服务助手';
+    } else {
+      maAgentHead.classList.remove('cloud');
+      maAgentHead.querySelector('.av').textContent = '🔗';
+      maAgentHead.querySelector('.av').style.background = 'linear-gradient(135deg,#10b981,#34d399)';
+      maAgentName.textContent = '互联助手';
+    }
+  }
+  window.switchMaPage = switchMaPage;
+  window.closeMiclawApp = () => miclawApp.classList.remove('show');
+
+  function openMiclawAppWith(page){
+    switchMaPage(page);
+    miclawApp.classList.add('show');
+  }
+
+  // 应用 Agent → 打开对应 App 窗口形态
+  // 同一个 App 的两个窗口形态可并存（参考微信/飞书/Notion 多窗口模式）
+  // 每次 apply 把目标窗口提到最前（focus 行为）
+  let topZ = 9810;
+  function bringToFront(el){
+    topZ += 1;
+    el.style.zIndex = topZ;
+  }
+  function applyAgent(agent){
+    currentAgent = agent;
+    const meta = AGENTS[agent];
+    if (agent === 'xiaoai') {
+      miclawWindow.classList.add('show');
+      bringToFront(miclawWindow);
+      ['connect','cloud','xiaoai'].forEach(a => {
+        const side = document.getElementById('agentSide-' + a);
+        const main = document.getElementById('agentMain-' + a);
+        if (side) side.style.display = (a === agent) ? 'flex' : 'none';
+        if (main) main.style.display = (a === agent) ? 'flex' : 'none';
+      });
+      if (miclawTitle) miclawTitle.textContent = meta.title;
+    } else {
+      openMiclawAppWith(meta.page);
+      bringToFront(miclawApp);
+    }
+  }
+  // 点窗口任意位置也能前置
+  miclawApp.addEventListener('mousedown', () => bringToFront(miclawApp));
+  miclawWindow.addEventListener('mousedown', () => bringToFront(miclawWindow));
+
+  window.openXiaoaiWindow = function(){
+    applyAgent('xiaoai');
+  };
+
+  window.askMiclaw = function(agent, text){
+    applyAgent(agent);
+    showToast('已填入示例 — 按发送试试');
+  };
+
+  // ===== 悬浮球的"默认 Agent"+ 悬停切换 =====
+  const agentPickers = document.getElementById('agentPickers');
+  let defaultAgent = 'connect'; // 悬浮球默认对应的 Agent
+
+  // 三个 Agent 在悬浮球本体上的 SVG path（白色描边线条图标，统一风格）
+  const BALL_PATHS = {
+    // 互联：两台设备 + 连接线
+    connect: '<rect x="3" y="6" width="8" height="12" rx="1.5"/><rect x="13" y="9" width="8" height="9" rx="1.5"/><path d="M11 12h2"/>',
+    // 云：标准云朵
+    cloud:   '<path d="M7 18a4 4 0 010-8 5 5 0 019.7-1A4.5 4.5 0 0117 18H7z"/>',
+    // 小爱：四角星
+    xiaoai:  '<path d="M12 3l1.8 4.5L18 9.3l-4 3.2 1.2 5L12 14.8 8.8 17.5 10 12.5 6 9.3l4.2-1.8z"/>',
+  };
+  const ballSvg = ball.querySelector('svg.ball-icon');
+
+  function setAgent(agent){
+    defaultAgent = agent;
+    // 仅替换 svg 内部 path，保留 svg 元素和其他兄弟（badge 等）
+    if (ballSvg) ballSvg.innerHTML = BALL_PATHS[agent];
+    // picker 当前选中态
+    document.querySelectorAll('.agent-picker').forEach(p => {
+      p.classList.toggle('active', p.dataset.agent === agent);
+    });
+    // 右键菜单当前默认 ✓
+    ['connect','cloud','xiaoai'].forEach(a => {
+      const item = document.getElementById('menu-' + a);
+      const check = document.getElementById('check-' + a);
+      if (item) item.classList.toggle('current', a === agent);
+      if (check) check.style.display = (a === agent) ? 'inline' : 'none';
+    });
+  }
+  window.setAgent = setAgent;
+  // 初始化默认 Agent 的图标
+  setAgent('connect');
+
+  function openMainAppFromBall(){
+    openMainApp({ agent: defaultAgent });
+    hideAgentPickers();
+  }
+  window.openMainAppFromBall = openMainAppFromBall;
+
+  // 悬停 0.5s 弹出 picker
+  let hoverTimer;
+  function showAgentPickers(){
+    // 拖拽中不弹 picker，避免与候选操作面板冲突
+    if (dragGhost) return;
+    const rect = ball.getBoundingClientRect();
+    const isLeft = rect.left < window.innerWidth / 2;
+    // pickers 放球的相反一侧
+    if (isLeft) {
+      agentPickers.style.left = (rect.right + 10) + 'px';
+      agentPickers.style.right = 'auto';
+    } else {
+      agentPickers.style.left = 'auto';
+      agentPickers.style.right = (window.innerWidth - rect.left + 10) + 'px';
+    }
+    agentPickers.style.top = (rect.top + rect.height/2 - 64) + 'px';
+    agentPickers.classList.add('show');
+  }
+  function hideAgentPickers(){
+    agentPickers.classList.remove('show');
+  }
+  ball.addEventListener('mouseenter', () => {
+    clearTimeout(hoverTimer);
+    hoverTimer = setTimeout(showAgentPickers, 700);
+  });
+  ball.addEventListener('mouseleave', () => {
+    clearTimeout(hoverTimer);
+    // 鼠标可能移到 pickers 上，给个延迟再判断
+    setTimeout(() => {
+      if (!agentPickers.matches(':hover')) hideAgentPickers();
+    }, 200);
+  });
+  // 鼠标按下立即取消悬停弹出，避免和点击/拖拽冲突
+  ball.addEventListener('mousedown', () => {
+    clearTimeout(hoverTimer);
+    hideAgentPickers();
+  });
+  agentPickers.addEventListener('mouseleave', hideAgentPickers);
+
+  // applyAgent 是 "切换并显示" — 始终打开
+  // openMainApp 在被悬浮球点击触发时支持 toggle（再点一次关闭当前默认窗口）
+  function openMainApp(opts){
+    opts = opts || {};
+    consumeBgTaskBadge();
+    const agent = opts.agent
+      || (opts.source === 'selection' || opts.source === 'mouse' ? 'xiaoai' : defaultAgent);
+
+    // 悬浮球单击 toggle：如果默认 Agent 的窗口已经显示，则关闭
+    if (opts.toggle) {
+      const isShowing = (agent === 'xiaoai')
+        ? miclawWindow.classList.contains('show')
+        : miclawApp.classList.contains('show');
+      if (isShowing) {
+        if (agent === 'xiaoai') miclawWindow.classList.remove('show');
+        else miclawApp.classList.remove('show');
+        return;
+      }
+    }
+
+    applyAgent(agent);
+    if (agent === 'xiaoai') {
+      if (opts.attachment) {
+        miclawContextText.textContent = '📎 附件：' + opts.attachment;
+        miclawContext.classList.add('show');
+      } else if (opts.text) {
+        const t = opts.text.length > 40 ? opts.text.slice(0, 40) + '...' : opts.text;
+        miclawContextText.textContent = '"' + t + '"';
+        miclawContext.classList.add('show');
+      } else if (miclawContext) {
+        miclawContext.classList.remove('show');
+      }
+    }
+  }
+  function closeMiclaw(){
+    miclawWindow.classList.remove('show');
+  }
+  window.closeMiclaw = closeMiclaw;
+  // 兼容历史调用
+  function openPopup(){ openMainApp(); }
+  function closePopup(){ /* 无小窗，空操作 */ }
+  window.expandToMainApp = function(){ openMainApp(); };
+  function togglePopup(){ openMainApp({ toggle: true }); }
+  function sendMsg(){ openMainApp(); }
+
+  // 模式切换（已废弃 — 模式由主 App 承载，悬浮球不展示）
+  // 保留空 listener 避免空指针；事件无副作用
+  if (modeBtn) modeBtn.addEventListener('click', () => {});
+
+  // ===== 文件拖拽 =====
+  let dragGhost = null;
+  let dragData = null;
+
+  document.querySelectorAll('.file-card').forEach(card => {
+    card.addEventListener('mousedown', (e) => {
+      if (e.button !== 0) return;
+      dragData = card.dataset.name;
+      const rect = card.getBoundingClientRect();
+      const originLeft = rect.left;
+      const originTop = rect.top;
+      const offsetX = e.clientX - rect.left;
+      const offsetY = e.clientY - rect.top;
+
+      dragGhost = card.cloneNode(true);
+      dragGhost.classList.add('drag-ghost');
+      dragGhost.style.width = rect.width + 'px';
+      dragGhost.style.left = (e.clientX - offsetX) + 'px';
+      dragGhost.style.top = (e.clientY - offsetY) + 'px';
+      document.body.appendChild(dragGhost);
+      card.classList.add('dragging');
+
+      // 拖拽期间禁用 Agent picker，避免和候选操作面板冲突
+      clearTimeout(hoverTimer);
+      hideAgentPickers();
+
+      const onMove = (ev) => {
+        dragGhost.style.left = (ev.clientX - offsetX) + 'px';
+        dragGhost.style.top = (ev.clientY - offsetY) + 'px';
+
+        // 检测是否进入悬浮球范围 → 球放大表示可释放
+        const ballRect = ball.getBoundingClientRect();
+        const cx = ballRect.left + ballRect.width/2;
+        const cy = ballRect.top + ballRect.height/2;
+        const distToBall = Math.hypot(cx - ev.clientX, cy - ev.clientY);
+
+        if (distToBall < 80) {
+          ball.classList.add('large');
+        } else {
+          ball.classList.remove('large');
+        }
+      };
+
+      const onUp = (ev) => {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+
+        ball.classList.remove('large');
+
+        let accepted = false;
+
+        // 落在悬浮球本体上 → 打开当前 Agent 主 App，附件挂到对话框
+        const ballRect = ball.getBoundingClientRect();
+        const cx = ballRect.left + ballRect.width/2;
+        const cy = ballRect.top + ballRect.height/2;
+        const dist = Math.hypot(cx - ev.clientX, cy - ev.clientY);
+        if (dist < 80) {
+          accepted = true;
+          ball.classList.add('busy');
+          const dragDataRef = dragData;
+          setTimeout(() => {
+            ball.classList.remove('busy');
+            openMainApp({ agent: defaultAgent, attachment: dragDataRef });
+            attachToCurrentAgent(defaultAgent, dragDataRef);
+          }, 600);
+        }
+
+        if (dragGhost) {
+          if (accepted) {
+            // 被接收 → 直接消失
+            dragGhost.remove();
+            dragGhost = null;
+            card.classList.remove('dragging');
+          } else {
+            // 没被接收 → 飞回原位再消失
+            dragGhost.style.transition = 'left 0.35s cubic-bezier(0.5, 0, 0.2, 1), top 0.35s cubic-bezier(0.5, 0, 0.2, 1), opacity 0.3s';
+            dragGhost.style.left = originLeft + 'px';
+            dragGhost.style.top = originTop + 'px';
+            dragGhost.style.opacity = '0';
+            const ghostRef = dragGhost;
+            const cardRef = card;
+            setTimeout(() => {
+              if (ghostRef && ghostRef.parentNode) ghostRef.remove();
+              cardRef.classList.remove('dragging');
+            }, 360);
+            dragGhost = null;
+          }
+        }
+        dragData = null;
+      };
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+  });
+
+  // 用坐标判断鼠标在哪个 opt 上（不依赖 elementFromPoint，避免被 ghost 挡住）
+  function getOptByPoint(x, y){
+    if (!dragOptions.classList.contains('show')) return null;
+    let result = null;
+    dragOptions.querySelectorAll('.opt').forEach(opt => {
+      const r = opt.getBoundingClientRect();
+      if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) {
+        result = opt;
+      }
+    });
+    return result;
+  }
+  function isOverOptions(x, y){
+    if (!dragOptions.classList.contains('show')) return false;
+    const r = dragOptions.getBoundingClientRect();
+    return x >= r.left - 20 && x <= r.right + 20 && y >= r.top - 20 && y <= r.bottom + 20;
+  }
+  // 判断是否拖到小窗（小窗也能接收文件）
+  function isOverPopup(x, y){
+    if (!popup.classList.contains('show')) return false;
+    const r = popup.getBoundingClientRect();
+    return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+  }
+
+  function showDragOptions(){
+    if (dragOptions.classList.contains('show')) return;
+    const rect = ball.getBoundingClientRect();
+    const isLeft = rect.left < window.innerWidth / 2;
+    let left = isLeft ? rect.right + 14 : rect.left - 320;
+    let top = rect.top + rect.height/2 - 38;
+    dragOptions.style.left = left + 'px';
+    dragOptions.style.top = top + 'px';
+    dragOptions.classList.add('show');
+  }
+  function hideDragOptions(){
+    dragOptions.classList.remove('show');
+    dragOptions.querySelectorAll('.opt').forEach(o => o.classList.remove('active'));
+  }
+
+  function executeAction(action, fileName){
+    ball.classList.add('busy');
+    showToast(`正在「${action}」：${fileName}`);
+    setTimeout(() => {
+      ball.classList.remove('busy');
+      if (action === '发到手机') {
+        showToast(`✓ 已通过互联发送到手机：${fileName}`);
+      } else {
+        // 直接打开主 App，结果在主 App 中查看
+        showToast(`✓ 已在主 App 中处理：${fileName} → ${action}`);
+        openMainApp({ attachment: fileName });
+      }
+    }, 1200);
+  }
+
+  // 拖拽到悬浮球后：在当前 Agent 的对话框上方挂附件引用条，等待用户输入指令
+  function attachToCurrentAgent(agent, fileName){
+    if (agent === 'xiaoai') {
+      // 小爱独立窗口已有 .miclaw-context 引用条逻辑（在 openMainApp 中已设置）
+      // 同时聚焦输入框
+      const ta = document.getElementById('miclawTextarea');
+      if (ta) ta.focus();
+      showToast(`已添加附件到超级小爱：${fileName}`);
+      return;
+    }
+    // 互联 / 云服务三栏：在输入框上方加附件条
+    const inputBox = document.querySelector('.ma-agent-input-box');
+    if (!inputBox) return;
+    let bar = inputBox.querySelector('.ma-attachment-bar');
+    if (!bar) {
+      bar = document.createElement('div');
+      bar.className = 'ma-attachment-bar';
+      bar.style.cssText = 'background:#f0f7ff;color:#1a73e8;padding:6px 10px;border-radius:6px;margin-bottom:6px;font-size:12px;display:flex;align-items:center;gap:6px;';
+      inputBox.insertBefore(bar, inputBox.firstChild);
+    }
+    bar.innerHTML = `<span>📎 ${fileName}</span><span style="margin-left:auto;cursor:pointer;color:#888;" onclick="this.parentElement.remove()">✕</span>`;
+    const ta = inputBox.querySelector('textarea');
+    if (ta) ta.focus();
+    showToast(`已添加附件到${agent === 'cloud' ? '云服务助手' : '互联助手'}：${fileName}`);
+  }
+
+  // ===== 隐藏 / 召回 =====
+  function hideBall(){
+    ball.classList.add('hidden');
+    closePopup();
+    recallIcon.classList.add('show');
+  }
+  function showBall(){
+    ball.classList.remove('hidden');
+    recallIcon.classList.remove('show');
+    showToast('悬浮球已恢复');
+  }
+
+  // 全局快捷键
+  document.addEventListener('keydown', (e) => {
+    // Alt+Space 召回悬浮球 / 切换对话
+    if (e.altKey && e.code === 'Space') {
+      e.preventDefault();
+      if (ball.classList.contains('hidden')) {
+        showBall();
+      } else {
+        togglePopup();
+      }
+    }
+    // Ctrl/Cmd+Shift+A 唤起 AI 鼠标
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.code === 'KeyA') {
+      e.preventDefault();
+      startMouseCapture();
+    }
+    // ESC 取消 AI 鼠标
+    if (e.code === 'Escape') {
+      if (mouseMask.classList.contains('show')) endMouseCapture();
+    }
+  });
+
+  // ===== AI 划词 =====
+  const selToolbar = document.getElementById('selToolbar');
+  const selResult = document.getElementById('selResult');
+  const srTitle = document.getElementById('srTitle');
+  const srBody = document.getElementById('srBody');
+  let lastSelectionText = '';
+
+  document.addEventListener('mouseup', (e) => {
+    // 排除悬浮球、对话窗、工具条等内的操作
+    if (ball.contains(e.target) || popup.contains(e.target) ||
+        selToolbar.contains(e.target) || selResult.contains(e.target) ||
+        ballMenu.contains(e.target) || dragOptions.contains(e.target) ||
+        document.querySelector('.hint-toggle').contains(e.target)) {
+      return;
+    }
+    // 密码框 / 敏感字段不触发
+    if (e.target.tagName === 'INPUT' && e.target.type === 'password') {
+      return;
+    }
+
+    setTimeout(() => {
+      const sel = window.getSelection();
+      const text = sel.toString().trim();
+      if (text.length < 2) {
+        hideSelToolbar();
+        return;
+      }
+      lastSelectionText = text;
+      const range = sel.getRangeAt(0);
+      const rect = range.getBoundingClientRect();
+      // 工具条出现在选区右下方 8px
+      let left = rect.right - 100;
+      let top = rect.bottom + 8;
+      // 边界检查
+      if (left + 280 > window.innerWidth) left = window.innerWidth - 290;
+      if (left < 8) left = 8;
+      if (top + 40 > window.innerHeight - 50) top = rect.top - 44;
+      selToolbar.style.left = left + 'px';
+      selToolbar.style.top = top + 'px';
+      selToolbar.classList.add('show');
+    }, 50);
+  });
+
+  // 点击空白消失
+  document.addEventListener('mousedown', (e) => {
+    if (!selToolbar.contains(e.target)) {
+      hideSelToolbar();
+    }
+    if (!selResult.contains(e.target)) {
+      hideSelResult();
+    }
+  });
+
+  selToolbar.querySelectorAll('.tool').forEach(tool => {
+    if (tool.classList.contains('divider')) return;
+    tool.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const action = tool.dataset.action;
+      // 全部直接跳超级小爱主页，AI 直接回复
+      hideSelToolbar();
+      sendSelectionToXiaoai(action, lastSelectionText);
+    });
+  });
+
+  // 二级菜单已废弃（改写不再弹风格选择，由 AI 追问处理）
+  const subMenu = document.getElementById('subMenu');
+  function showSubMenu(){}
+  function hideSubMenu(){ if (subMenu) subMenu.classList.remove('show'); }
+
+  // 把选中的文本 + 操作打包成一条对话发给超级小爱
+  function sendSelectionToXiaoai(action, text){
+    const promptMap = {
+      '翻译': '翻译这段：',
+      '解释': '解释这段：',
+      '改写': '改写这段：',
+      '问小爱': '基于这段内容回答我的问题：',
+    };
+    const prefix = promptMap[action] || (action + '：');
+    const fullPrompt = prefix + '\n\n"' + text + '"';
+    // 切到小爱并把欢迎页换成对话气泡
+    applyAgent('xiaoai');
+    const mainArea = document.getElementById('agentMain-xiaoai');
+    if (mainArea) {
+      mainArea.innerHTML = `
+        <div class="miclaw-msglist" style="flex:1;overflow-y:auto;padding:24px 32px;display:flex;flex-direction:column;gap:12px;">
+          <div style="align-self:flex-end;max-width:75%;background:#1a73e8;color:#fff;padding:10px 14px;border-radius:14px;font-size:13px;line-height:1.55;white-space:pre-wrap;">${fullPrompt}</div>
+          <div class="ai-reply-pending" style="align-self:flex-start;max-width:75%;background:#f4f5f7;color:#1d1d1f;padding:10px 14px;border-radius:14px;font-size:13px;line-height:1.55;">正在处理…</div>
+        </div>
+      `;
+      setTimeout(() => {
+        const pending = mainArea.querySelector('.ai-reply-pending');
+        if (pending) pending.innerHTML = mockSelReply(action, text);
+      }, 700);
+    }
+    if (miclawContext) miclawContext.classList.remove('show');
+  }
+
+  // 旧的就地结果卡片，保留函数避免空指针，但不再被入口调用
+  function runSelAction(action, text, style){
+    hideSelToolbar();
+  }
+
+  function hideSelToolbar(){ selToolbar.classList.remove('show'); hideSubMenu(); }
+  function hideSelResult(){ selResult.classList.remove('show'); }
+  window.hideSelResult = hideSelResult;
+
+  function mockSelReply(action, text, style){
+    const isEng = /[a-zA-Z]/.test(text) && !/[\u4e00-\u9fa5]/.test(text);
+    if (action === '改写') {
+      // 改写不直接给结果，反问用户想要什么风格
+      return '想改成什么风格？比如：<br>· <b>润色</b> — 让语句更通顺<br>· <b>简化</b> — 去掉冗余<br>· <b>正式</b> — 适合公文 / 邮件<br>· <b>口语</b> — 适合聊天 / 分享<br><br>直接回复一个就行～';
+    }
+    if (action === '问小爱') {
+      return '我已经看到这段内容了，你想问点什么？';
+    }
+    const map = {
+      '翻译': isEng
+        ? '2019 年实现了量子霸权，但实际应用仍然有限。2026 年，IBM 和谷歌展示了具备容错能力的量子计算机，可在制药和金融领域运行优化任务。'
+        : 'Translated: ' + text.slice(0, 80) + '...',
+      '解释': '这段内容核心讲述的是：' + text.slice(0, 40) + '... — 涉及关键概念是 X 和 Y。（Demo 模拟回复）',
+    };
+    return map[action] || '已完成';
+  }
+
+  // ===== AI 鼠标 =====
+  const mouseMask = document.getElementById('mouseMask');
+  const mouseRect = document.getElementById('mouseRect');
+  const mouseHint = document.getElementById('mouseHint');
+  const mouseResult = document.getElementById('mouseResult');
+  const mrBody = document.getElementById('mrBody');
+  const mrPreview = document.getElementById('mrPreview');
+  let mouseSelecting = false;
+  let mouseStartX, mouseStartY;
+
+  function startMouseCapture(){
+    if (ball.classList.contains('hidden')) return;
+    hideSelToolbar();
+    hideSelResult();
+    closePopup();
+    hideDragOptions();
+    mouseMask.classList.add('show');
+    mouseHint.classList.add('show');
+    mouseHint.style.left = '50%';
+    mouseHint.style.top = '20px';
+    mouseHint.style.transform = 'translateX(-50%)';
+  }
+  window.startMouseCapture = startMouseCapture;
+  function endMouseCapture(){
+    mouseMask.classList.remove('show');
+    mouseRect.classList.remove('show');
+    mouseHint.classList.remove('show');
+    mouseSelecting = false;
+  }
+  window.hideMouseResult = function(){ mouseResult.classList.remove('show'); };
+
+  mouseMask.addEventListener('mousedown', (e) => {
+    mouseSelecting = true;
+    mouseStartX = e.clientX;
+    mouseStartY = e.clientY;
+    mouseRect.classList.add('show');
+    mouseRect.style.left = e.clientX + 'px';
+    mouseRect.style.top = e.clientY + 'px';
+    mouseRect.style.width = '0px';
+    mouseRect.style.height = '0px';
+  });
+  document.addEventListener('mousemove', (e) => {
+    if (!mouseSelecting) return;
+    const x = Math.min(e.clientX, mouseStartX);
+    const y = Math.min(e.clientY, mouseStartY);
+    const w = Math.abs(e.clientX - mouseStartX);
+    const h = Math.abs(e.clientY - mouseStartY);
+    mouseRect.style.left = x + 'px';
+    mouseRect.style.top = y + 'px';
+    mouseRect.style.width = w + 'px';
+    mouseRect.style.height = h + 'px';
+  });
+  document.addEventListener('mouseup', (e) => {
+    if (!mouseSelecting) return;
+    mouseSelecting = false;
+    const w = parseInt(mouseRect.style.width);
+    const h = parseInt(mouseRect.style.height);
+    if (w < 50 || h < 50) {
+      showToast('圈选区域太小，请再大一点');
+      mouseRect.classList.remove('show');
+      return;
+    }
+    endMouseCapture();
+    // 圈选完成 → 直接进超级小爱主页，截图作为附件
+    sendScreenshotToXiaoai(w, h);
+  });
+
+  // 把 AI 看屏的截图发给超级小爱（作为附件，等用户输入指令）
+  function sendScreenshotToXiaoai(w, h){
+    applyAgent('xiaoai');
+    // 在输入框上方挂附件引用条
+    if (miclawContextText && miclawContext) {
+      miclawContextText.textContent = '📷 屏幕截图';
+      miclawContext.classList.add('show');
+    }
+    // 输入框聚焦 + 给提示占位
+    const ta = document.getElementById('miclawTextarea');
+    if (ta) {
+      ta.value = '';
+      ta.placeholder = '可以问"识别图中文字"、"解释这张图"、"翻译图中内容"…';
+      ta.focus();
+    }
+    showToast('已添加屏幕截图，输入你的问题');
+  }
+
+  // ===== 全屏模拟 =====
+  const fsMask = document.getElementById('fsMask');
+  let beforeFsBallHidden = false;
+  window.simulateFullscreen = function(){
+    beforeFsBallHidden = ball.classList.contains('hidden');
+    ball.classList.add('hidden');
+    closePopup();
+    hideSelToolbar();
+    fsMask.classList.add('show');
+  };
+  window.exitFullscreen = function(){
+    fsMask.classList.remove('show');
+    if (!beforeFsBallHidden) ball.classList.remove('hidden');
+    showToast('已退出全屏，悬浮球恢复');
+  };
+
+  // ===== 重置 =====
+  function reset(){
+    ball.classList.remove('hidden', 'large', 'busy', 'dragging');
+    ball.style.left = '';
+    ball.style.right = '18px';
+    ball.style.top = '46%';
+    ballBadge.classList.remove('show');
+    bgTaskResult = null;
+    miclawApp.classList.remove('show');
+    miclawWindow.classList.remove('show');
+    hideAgentPickers();
+    hideDragOptions();
+    hideSelToolbar();
+    hideSelResult();
+    endMouseCapture();
+    hideMouseResult();
+    fsMask.classList.remove('show');
+    ballMenu.style.display = 'none';
+    recallIcon.classList.remove('show');
+    showToast('Demo 已重置');
+  }
+})();
+</script>
+</body>
+</html>
