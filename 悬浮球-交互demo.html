@@ -77,6 +77,17 @@
     transition: background 0.12s;
   }
   .tray-item:hover { background: rgba(0,0,0,0.04); }
+  .tray-item.primary {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 16px;
+  }
+  .tray-leading {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    background: #e8f0fe;
+    display: flex; align-items: center; justify-content: center;
+    color: #1a73e8;
+  }
   .hint-panel {
     position: fixed; top: 46px; right: 12px; z-index: 10000;
     background: rgba(20,20,30,0.95);
@@ -1262,6 +1273,21 @@
 
 <!-- 任务栏托盘面板 -->
 <div class="tray-panel" id="trayPanel">
+  <div class="tray-item primary" onclick="trayOpenChat()">
+    <span class="tray-leading">
+      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+    </span>
+    <span>打开对话</span>
+  </div>
+  <div class="tray-item primary" onclick="trayStartCapture()">
+    <span class="tray-leading">
+      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 012-2h2M17 3h2a2 2 0 012 2v2M21 17v2a2 2 0 01-2 2h-2M7 21H5a2 2 0 01-2-2v-2"/><rect x="8" y="8" width="8" height="8" rx="1"/></svg>
+    </span>
+    <span>启动 AI 看屏</span>
+  </div>
+
+  <div class="tray-divider"></div>
+
   <div class="tray-device-name">Xiaomi MIX Flip 2</div>
   <div class="tray-action" onclick="trayAction('启用热点')">
     <span class="tray-icon">
@@ -1275,6 +1301,7 @@
     </span>
     <span>妙享桌面</span>
   </div>
+
   <div class="tray-divider"></div>
   <div class="tray-item" onclick="trayAction('发送文件')">发送文件</div>
   <div class="tray-divider"></div>
@@ -1783,6 +1810,14 @@
   window.trayAction = function(name){
     trayPanel.classList.remove('show');
     showToast(`托盘入口 → ${name}`);
+  };
+  window.trayOpenChat = function(){
+    trayPanel.classList.remove('show');
+    openMainApp({ agent: defaultAgent });
+  };
+  window.trayStartCapture = function(){
+    trayPanel.classList.remove('show');
+    startMouseCapture();
   };
   document.addEventListener('mousedown', (e) => {
     if (!trayPanel.contains(e.target) &&
